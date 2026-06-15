@@ -6,7 +6,13 @@ const USERS = {
     id: 'nick',
     name: 'Nick',
     role: 'admin' as const,
-    password: process.env.NICK_PASSWORD,
+    password: 'SecretCampCard2026',
+  },
+  planning: {
+    id: 'planning',
+    name: 'Planning',
+    role: 'admin' as const,
+    password: 'CampCard2026',
   },
   motherofthebride: {
     id: 'motherofthebride',
