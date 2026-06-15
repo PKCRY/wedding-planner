@@ -398,9 +398,9 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
           <div className="flex items-center gap-2">
             {!editing && (
               <button onClick={startEditing}
-                className="w-9 h-9 flex items-center justify-center rounded-full text-base"
-                style={{ backgroundColor: '#f5f7f5', color: '#5a7d5e' }}>
-                ✎
+                className="flex items-center justify-center rounded-full text-xs font-semibold px-3"
+                style={{ backgroundColor: '#f5f7f5', color: '#5a7d5e', minHeight: 36 }}>
+                Edit
               </button>
             )}
             <button onClick={onClose}
