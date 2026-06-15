@@ -177,7 +177,7 @@ export default function HerDashboardClient({
       {tab === 'tasks' && (
         <button
           onClick={() => setShowAdd(true)}
-          className="fixed bottom-8 right-5 w-14 h-14 rounded-full text-white text-2xl flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10"
+          className="fixed bottom-8 right-5 w-11 h-11 rounded-full text-white text-xl flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10"
           style={{ backgroundColor: '#d4849a', boxShadow: '0 4px 16px rgba(212,132,154,0.4)' }}
         >
           +
