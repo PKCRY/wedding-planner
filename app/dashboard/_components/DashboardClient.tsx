@@ -196,7 +196,7 @@ export default function DashboardClient({
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
                 { key: 'inventory', label: 'Items' },
-                { key: 'notify',    label: 'Notify' },
+                ...(user.id === 'nick' ? [{ key: 'notify', label: 'Notify' }] : []),
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
               ] as { key: Tab; label: string; lgHide?: boolean }[]).map(({ key, label, lgHide }) => (
                 <button
