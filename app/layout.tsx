@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   title: "Wedding Planner",
   description: "Our wedding planning dashboard",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Wedding Planner",
+    startupImage: [{ url: "/apple-touch-icon-v3.png" }],
+  },
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
@@ -41,9 +47,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
-      <head>
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v3.png" />
-      </head>
       <body className="min-h-full flex flex-col safe-top">
         <ServiceWorkerRegistration />
         <InstallPrompt />
