@@ -59,6 +59,19 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  async function toggleDone(item: InventoryItem) {
+    const next = item.status === 'acquired' ? 'needed' : 'acquired'
+    const res = await fetch(`/api/inventory/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next }),
+    })
+    if (res.ok) {
+      const updated = await res.json() as InventoryItem
+      setItems(prev => prev.map(i => i.id === item.id ? updated : i))
+    }
+  }
+
   async function saveItem(id: number | null, data: Partial<InventoryItem>) {
     if (id === null) {
       const res = await fetch('/api/inventory', {
@@ -137,6 +150,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           isAdmin={isAdmin}
           onCycle={() => cycleStatus(item)}
           onEdit={() => setEditItem(item)}
+          onToggleDone={() => toggleDone(item)}
         />
       ))}
 
@@ -185,11 +199,12 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   )
 }
 
-function ItemCard({ item, isAdmin, onCycle, onEdit }: {
+function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone }: {
   item: InventoryItem
   isAdmin: boolean
   onCycle: () => void
   onEdit: () => void
+  onToggleDone: () => void
 }) {
   const isAcquired = item.status === 'acquired'
   return (
@@ -197,8 +212,23 @@ function ItemCard({ item, isAdmin, onCycle, onEdit }: {
       className="relative bg-white rounded-2xl overflow-hidden"
       style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e4ede4' }}
     >
-      <div className="absolute left-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: STATUS_BAR[item.status] }} />
-      <div className="pl-5 pr-4 py-3.5 flex items-center gap-3">
+      <div className="pl-4 pr-4 py-3.5 flex items-center gap-3">
+        {/* Checkbox to mark acquired / unmark */}
+        <button
+          onClick={onToggleDone}
+          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+          style={{
+            backgroundColor: isAcquired ? '#7a9e7e' : '#fff',
+            border: `2px solid ${isAcquired ? '#7a9e7e' : '#b8d0ba'}`,
+          }}
+        >
+          {isAcquired && (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2.5 7L5.5 10L11.5 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+
         <div className="flex-1 min-w-0">
           <p
             className={`font-semibold text-[15px] leading-snug ${isAcquired ? 'line-through' : ''}`}
