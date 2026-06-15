@@ -57,7 +57,7 @@ body {
   display: none;
 }
 
-.drag-list {
+.drag-list, .drag-list * {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;

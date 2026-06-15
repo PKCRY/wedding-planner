@@ -325,10 +325,18 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone, dragHandle }: 
           {dragHandle && (
             <button
               {...dragHandle}
+              onContextMenu={(e) => e.preventDefault()}
               className="touch-none p-1.5 rounded cursor-grab active:cursor-grabbing"
-              style={{ color: '#c8dcc8', fontSize: 18, lineHeight: 1, WebkitTouchCallout: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+              style={{ color: '#c8dcc8', WebkitTouchCallout: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
-              ⠿
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="5" cy="4" r="1.5" fill="currentColor"/>
+                <circle cx="11" cy="4" r="1.5" fill="currentColor"/>
+                <circle cx="5" cy="8" r="1.5" fill="currentColor"/>
+                <circle cx="11" cy="8" r="1.5" fill="currentColor"/>
+                <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+                <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+              </svg>
             </button>
           )}
         </div>
