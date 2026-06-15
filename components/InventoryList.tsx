@@ -1,6 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { InventoryItem } from '@/lib/db'
 
 const STATUS_BAR: Record<string, string> = {
@@ -39,6 +55,11 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [showAdd, setShowAdd] = useState(false)
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
+
   useEffect(() => { load() }, [])
 
   async function load() {
@@ -57,6 +78,25 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       const updated = await res.json() as InventoryItem
       setItems(prev => prev.map(i => i.id === item.id ? updated : i))
     }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const activeItems = items.filter(i => i.status !== 'acquired')
+    const acquired = items.filter(i => i.status === 'acquired')
+    const oldIndex = activeItems.findIndex(i => i.id === active.id)
+    const newIndex = activeItems.findIndex(i => i.id === over.id)
+    const reordered = arrayMove(activeItems, oldIndex, newIndex)
+    const updated = reordered.map((item, idx) => ({ ...item, sort_order: idx + 1 }))
+    setItems([...updated, ...acquired])
+
+    fetch('/api/inventory/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated.map(i => ({ id: i.id, sort_order: i.sort_order }))),
+    }).catch(() => {})
   }
 
   async function toggleDone(item: InventoryItem) {
@@ -143,16 +183,20 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           All items acquired!
         </div>
       )}
-      {active.map(item => (
-        <ItemCard
-          key={item.id}
-          item={item}
-          isAdmin={isAdmin}
-          onCycle={() => cycleStatus(item)}
-          onEdit={() => setEditItem(item)}
-          onToggleDone={() => toggleDone(item)}
-        />
-      ))}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={active.map(i => i.id)} strategy={verticalListSortingStrategy}>
+          {active.map(item => (
+            <SortableItemCard
+              key={item.id}
+              item={item}
+              isAdmin={isAdmin}
+              onCycle={() => cycleStatus(item)}
+              onEdit={() => setEditItem(item)}
+              onToggleDone={() => toggleDone(item)}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
 
       {/* Acquired section */}
       {acquired.length > 0 && (
@@ -171,6 +215,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
               isAdmin={isAdmin}
               onCycle={() => cycleStatus(item)}
               onEdit={() => setEditItem(item)}
+              onToggleDone={() => toggleDone(item)}
             />
           ))}
         </>
@@ -199,13 +244,28 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   )
 }
 
-function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone }: {
+type CardCb = () => void | Promise<void>
+type ItemCardProps = {
   item: InventoryItem
   isAdmin: boolean
-  onCycle: () => void
-  onEdit: () => void
-  onToggleDone: () => void
-}) {
+  onCycle: CardCb
+  onEdit: CardCb
+  onToggleDone: CardCb
+  dragHandle?: Record<string, unknown>
+}
+function SortableItemCard(props: ItemCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.item.id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+    >
+      <ItemCard {...props} dragHandle={{ ...attributes, ...listeners }} />
+    </div>
+  )
+}
+
+function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone, dragHandle }: ItemCardProps) {
   const isAcquired = item.status === 'acquired'
   return (
     <div
@@ -260,6 +320,15 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone }: {
           >
             Edit
           </button>
+          {dragHandle && (
+            <button
+              {...dragHandle}
+              className="touch-none p-1.5 rounded cursor-grab active:cursor-grabbing"
+              style={{ color: '#c8dcc8', fontSize: 18, lineHeight: 1 }}
+            >
+              ⠿
+            </button>
+          )}
         </div>
       </div>
     </div>
