@@ -1,0 +1,18 @@
+name: Siobhan Daily Reminders
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # 9:00am EDT (UTC-4)
+    - cron: '0 22 * * *'   # 6:00pm EDT
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Siobhan reminder
+        run: |
+          curl -s -X POST "${{ secrets.APP_URL }}/api/cron/siobhan-reminder" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body

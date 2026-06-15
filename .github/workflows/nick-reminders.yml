@@ -1,0 +1,20 @@
+name: Nick Daily Reminders
+
+on:
+  schedule:
+    - cron: '30 12 * * *'   # 8:30am EDT (UTC-4)
+    - cron: '30 16 * * *'   # 12:30pm EDT
+    - cron: '0 21 * * *'    # 5:00pm EDT
+    - cron: '0 23 * * *'    # 7:00pm EDT
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Nick reminder
+        run: |
+          curl -s -X POST "${{ secrets.APP_URL }}/api/cron/nick-reminder" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
