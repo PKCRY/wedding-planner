@@ -23,6 +23,7 @@ export interface Task {
   sort_order: number
   due_date: string | null
   completed_date: string | null
+  completed_by: string
   blocked_by: string
   responsible_party: string
   important_contacts: string

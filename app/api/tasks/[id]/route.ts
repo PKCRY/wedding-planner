@@ -24,8 +24,13 @@ export async function PATCH(req: NextRequest, { params }: Context) {
 
     if (updates.status) {
       patch.status = updates.status
-      if (updates.status === 'done') patch.completed_date = new Date().toISOString().slice(0, 10)
-      else patch.completed_date = null
+      if (updates.status === 'done') {
+        patch.completed_date = new Date().toISOString().slice(0, 10)
+        patch.completed_by = session.user.name
+      } else {
+        patch.completed_date = null
+        patch.completed_by = ''
+      }
     }
 
     if (updates.add_comment && typeof updates.add_comment === 'string' && updates.add_comment.trim()) {
@@ -80,11 +85,13 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     if (updates[f] !== undefined) patch[f] = updates[f]
   }
 
-  // Handle status → auto set/clear completed_date
+  // Handle status → auto set/clear completed_date + completed_by
   if (updates.status === 'done' && !patch.completed_date) {
     patch.completed_date = updates.completed_date ?? new Date().toISOString().slice(0, 10)
+    patch.completed_by = session.user.name
   } else if (updates.status && updates.status !== 'done') {
     patch.completed_date = null
+    patch.completed_by = ''
   }
   if (updates.completed_date !== undefined) patch.completed_date = updates.completed_date || null
 

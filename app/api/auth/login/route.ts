@@ -26,6 +26,18 @@ const USERS = {
     role: 'admin' as const,
     password: 'CampCard2026',
   },
+  taylor: {
+    id: 'taylor',
+    name: 'Taylor',
+    role: 'admin' as const,
+    password: 'SecretCampCard2026',
+  },
+  dad: {
+    id: 'dad',
+    name: 'Dad',
+    role: 'admin' as const,
+    password: 'SecretCampCard2026',
+  },
   siobhan: {
     id: 'siobhan',
     name: 'Siobhan',

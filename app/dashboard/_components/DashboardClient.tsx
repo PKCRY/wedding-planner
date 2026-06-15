@@ -28,10 +28,11 @@ const STATUS_LABEL: Record<string, string> = {
 
 const ASSIGN_LABEL: Record<string, string> = {
   nick: 'Nick', siobhan: 'Siobhan', both: 'Both',
+  taylor: 'Taylor', dad: 'Dad', mom: 'Mom',
 }
 
-type Filter = 'all' | 'nick' | 'siobhan' | 'both'
-type Tab = 'tasks' | 'completed' | 'calendar' | 'inventory' | 'notify'
+type Filter = 'all' | 'nick' | 'siobhan' | 'both' | 'taylor' | 'dad'
+type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify'
 
 export default function DashboardClient({
   user,
@@ -125,6 +126,7 @@ export default function DashboardClient({
   }
 
   const filtered = filter === 'all' ? tasks : tasks.filter(t => t.assigned_to === filter)
+  const reviewTasks = tasks.filter(t => t.created_by === 'siobhan' && t.status !== 'done')
   const displayed = [...filtered]
     .filter(t => tab === 'completed' ? t.status === 'done' : t.status !== 'done')
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -195,6 +197,7 @@ export default function DashboardClient({
               {([
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
+                { key: 'review',    label: `Review${reviewTasks.length ? ` (${reviewTasks.length})` : ''}` },
                 { key: 'inventory', label: 'Items' },
                 ...(user.id === 'nick' ? [{ key: 'notify', label: 'Notify' }] : []),
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
@@ -214,15 +217,15 @@ export default function DashboardClient({
             {(tab === 'tasks' || tab === 'completed') && (
               <div>
                 {/* Filter */}
-                <div className="flex gap-1 rounded-xl p-1 mb-4" style={{ backgroundColor: '#e8f0e8' }}>
-                  {(['all', 'nick', 'siobhan', 'both'] as Filter[]).map(f => (
+                <div className="flex gap-1 rounded-xl p-1 mb-4 overflow-x-auto no-scrollbar" style={{ backgroundColor: '#e8f0e8' }}>
+                  {(['all', 'nick', 'siobhan', 'taylor', 'dad', 'both'] as Filter[]).map(f => (
                     <button
                       key={f}
                       onClick={() => changeFilter(f)}
-                      className="flex-1 text-sm font-medium rounded-lg transition-colors"
-                      style={{ backgroundColor: filter === f ? '#fff' : 'transparent', color: filter === f ? '#2d4a30' : '#7a9e7e', minHeight: 44 }}
+                      className="shrink-0 text-sm font-medium rounded-lg transition-colors"
+                      style={{ backgroundColor: filter === f ? '#fff' : 'transparent', color: filter === f ? '#2d4a30' : '#7a9e7e', minHeight: 44, minWidth: 60, padding: '0 10px' }}
                     >
-                      {f === 'all' ? 'All' : f === 'nick' ? (user.id === 'nick' ? 'Mine' : 'Nick\'s') : f === 'siobhan' ? 'Hers' : 'Both'}
+                      {f === 'all' ? 'All' : f === user.id ? 'Mine' : ASSIGN_LABEL[f] ?? f}
                     </button>
                   ))}
                 </div>
@@ -244,6 +247,24 @@ export default function DashboardClient({
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* In Review — tasks Siobhan submitted */}
+            {tab === 'review' && (
+              <div className="space-y-2 pb-24 lg:pb-8">
+                {reviewTasks.length === 0 ? (
+                  <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks pending review</div>
+                ) : reviewTasks.sort((a, b) => a.sort_order - b.sort_order).map((task, i) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    pos={i + 1}
+                    onDetail={() => setDetailTask(task)}
+                    onEdit={() => setEditTask(task)}
+                    onDelete={() => deleteTask(task.id)}
+                  />
+                ))}
               </div>
             )}
 
@@ -458,6 +479,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               { label: 'Assigned', value: ASSIGN_LABEL[task.assigned_to] },
               task.due_date ? { label: 'Due', value: new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) } : null,
               task.completed_date ? { label: 'Completed', value: new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) } : null,
+              task.completed_by ? { label: 'Completed by', value: task.completed_by } : null,
               task.responsible_party ? { label: 'Responsible', value: task.responsible_party } : null,
               task.important_contacts ? { label: 'Contacts', value: task.important_contacts } : null,
             ].filter(Boolean).map(item => (
@@ -615,6 +637,8 @@ function TaskModal({ task, onClose, onSave, onAddComment }: {
                 <option value="both">Both</option>
                 <option value="nick">Nick</option>
                 <option value="siobhan">Siobhan</option>
+                <option value="taylor">Taylor</option>
+                <option value="dad">Dad</option>
               </select>
             </div>
             <div>

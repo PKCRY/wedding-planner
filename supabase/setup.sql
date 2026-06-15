@@ -53,6 +53,7 @@ ALTER TABLE tasks
   ADD COLUMN IF NOT EXISTS responsible_party  text    NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS important_contacts text    NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS completed_date     date,
+  ADD COLUMN IF NOT EXISTS completed_by       text    NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS task_comments      jsonb   NOT NULL DEFAULT '[]'::jsonb;
 
 -- ── Migrate old field value if upgrading ──────────────────────────────────

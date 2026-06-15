@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { supabase, sortTasks } from '@/lib/db'
+import { webpush } from '@/lib/push'
 
 const MEMBER_VISIBLE = ['siobhan', 'both']
 const TOP_N = 5
@@ -72,5 +73,22 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase.from('tasks').insert(insert).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Notify Nick when Siobhan adds a task
+  if (session.user.role !== 'admin') {
+    try {
+      const { data: nickSub } = await supabase
+        .from('push_subscriptions').select('subscription').eq('user_id', 'nick').single()
+      if (nickSub) {
+        await webpush.sendNotification(nickSub.subscription, JSON.stringify({
+          title: '📋 Siobhan added a task',
+          body: `"${data.title}" is waiting for review`,
+          url: '/dashboard',
+          badge_count: 1,
+        }))
+      }
+    } catch { /* best-effort */ }
+  }
+
   return NextResponse.json(data, { status: 201 })
 }
