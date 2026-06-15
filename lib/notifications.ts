@@ -45,11 +45,11 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-export async function sendPushToAll(payload: { title: string; body: string; url?: string }) {
+export async function sendPushToAll(payload: { title: string; body: string; url?: string; badge_count?: number }) {
   try {
     const { data: subs } = await supabase.from('push_subscriptions').select('subscription')
     if (!subs?.length) return
-    const json = JSON.stringify({ url: '/', ...payload })
+    const json = JSON.stringify({ url: '/', badge_count: 1, ...payload })
     await Promise.allSettled(
       subs.map(({ subscription }) => webpush.sendNotification(subscription, json))
     )

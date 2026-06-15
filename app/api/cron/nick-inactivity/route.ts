@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     title: 'Wedding Planner — Hey Nick! 👋',
     body: level.message,
     url: '/dashboard',
+    badge_count: 1,
   })
 
   await webpush.sendNotification(row.subscription, payload)
