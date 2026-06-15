@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(sortTasks(data ?? []))
   }
 
-  // Member (Siobhan): top N non-done tasks + count info
+  // Member (Siobhan): top N non-done tasks, or completed tasks if ?completed=1
+  const { searchParams } = new URL(req.url)
+  const wantCompleted = searchParams.get('completed') === '1'
+
   const { data: all, error } = await supabase
     .from('tasks')
     .select('*')
@@ -32,8 +35,10 @@ export async function GET(req: NextRequest) {
   const sorted = sortTasks(all ?? [])
   const active = sorted.filter((t) => t.status !== 'done')
   const done = sorted.filter((t) => t.status === 'done')
-  const top5 = active.slice(0, TOP_N)
 
+  if (wantCompleted) return NextResponse.json(done)
+
+  const top5 = active.slice(0, TOP_N)
   const res = NextResponse.json(top5)
   res.headers.set('x-total', String(sorted.length))
   res.headers.set('x-done', String(done.length))

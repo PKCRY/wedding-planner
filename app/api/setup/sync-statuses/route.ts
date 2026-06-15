@@ -10,7 +10,7 @@ const STATUS_MAP: Record<string, 'done' | 'in_progress' | 'pending'> = {
   'attend pre-cana': 'done',
   'cabin assignments - finalize': 'done',
   'clarify drink package': 'done',
-  'collect vases': 'done',
+  'collect vases': 'in_progress',
   'decide on drink package': 'done',
   'decide on signature drinks': 'done',
   'design camp logo': 'done',
@@ -84,6 +84,11 @@ const STATUS_MAP: Record<string, 'done' | 'in_progress' | 'pending'> = {
   'flowers for vases': 'pending',
 }
 
+// Tasks that need priority overrides beyond just status
+const PRIORITY_OVERRIDES: Record<string, { priority: 'low' | 'medium' | 'high' }> = {
+  'collect vases': { priority: 'low' },
+}
+
 export async function POST() {
   const session = await getSession()
   if (!session.user || session.user.role !== 'admin') {
@@ -117,8 +122,22 @@ export async function POST() {
     if (u.new === 'done') patch.completed_date = new Date().toISOString().slice(0, 10)
     else patch.completed_date = null
 
+    const override = PRIORITY_OVERRIDES[u.title.toLowerCase().trim()]
+    if (override) Object.assign(patch, override)
+
     const { error } = await supabase.from('tasks').update(patch).eq('id', u.id)
     if (error) errors.push(`${u.title}: ${error.message}`)
+  }
+
+  // Apply priority overrides to tasks whose status didn't change
+  for (const task of tasks ?? []) {
+    const key = task.title.toLowerCase().trim()
+    const override = PRIORITY_OVERRIDES[key]
+    if (!override) continue
+    const alreadyUpdated = updates.some(u => u.id === task.id)
+    if (alreadyUpdated) continue
+    const { error } = await supabase.from('tasks').update(override).eq('id', task.id)
+    if (error) errors.push(`priority override ${task.title}: ${error.message}`)
   }
 
   return NextResponse.json({

@@ -43,6 +43,8 @@ export default function HerDashboardClient({
   const [showAdd, setShowAdd] = useState(false)
   const [detailTask, setDetailTask] = useState<Task | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [completedTasks, setCompletedTasks] = useState<Task[] | null>(null)
+  const [showCompleted, setShowCompleted] = useState(false)
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -59,6 +61,11 @@ export default function HerDashboardClient({
     return tasks
   }
 
+  async function refreshCompleted() {
+    const res = await fetch('/api/tasks?completed=1')
+    if (res.ok) setCompletedTasks(await res.json() as Task[])
+  }
+
   async function setStatus(task: Task, status: string) {
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: 'PATCH',
@@ -67,6 +74,7 @@ export default function HerDashboardClient({
     })
     if (!res.ok) return
     const next = await refreshList()
+    if (completedTasks !== null) await refreshCompleted()
     if (detailTask?.id === task.id) {
       setDetailTask(next.find(t => t.id === task.id) ?? null)
     }
@@ -81,6 +89,7 @@ export default function HerDashboardClient({
     if (res.ok) {
       const updated = await res.json() as Task
       setTasks(prev => prev.map(t => t.id === taskId ? updated : t))
+      setCompletedTasks(prev => prev ? prev.map(t => t.id === taskId ? updated : t) : prev)
       if (detailTask?.id === taskId) setDetailTask(updated)
     }
   }
@@ -93,8 +102,11 @@ export default function HerDashboardClient({
     })
     if (res.ok) {
       const updated = await res.json() as Task
-      setTasks(prev => prev.map(t => t.id === taskId ? updated : t))
-      if (detailTask?.id === taskId) setDetailTask(updated)
+      const next = await refreshList()
+      if (completedTasks !== null) await refreshCompleted()
+      if (detailTask?.id === taskId) {
+        setDetailTask(next.find(t => t.id === taskId) ?? updated)
+      }
     }
   }
 
@@ -160,7 +172,7 @@ export default function HerDashboardClient({
         {tab === 'tasks' && (
           <>
             {tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 space-y-2">
+              <div className="flex flex-col items-center justify-center py-12 space-y-2">
                 <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ backgroundColor: '#e8f4e8' }}>
                   ✓
                 </div>
@@ -178,6 +190,36 @@ export default function HerDashboardClient({
                 ))}
               </div>
             )}
+
+            {/* Completed section */}
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  if (completedTasks === null) refreshCompleted()
+                  setShowCompleted(v => !v)
+                }}
+                className="w-full flex items-center justify-between px-1 py-2"
+              >
+                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>
+                  Completed
+                </span>
+                <span className="text-xs" style={{ color: '#b8d0ba' }}>{showCompleted ? '▲' : '▼'}</span>
+              </button>
+
+              {showCompleted && (
+                <div className="space-y-2 mt-1">
+                  {completedTasks === null ? (
+                    <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Loading...</p>
+                  ) : completedTasks.length === 0 ? (
+                    <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Nothing completed yet.</p>
+                  ) : (
+                    completedTasks.map(task => (
+                      <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </>
         )}
 
