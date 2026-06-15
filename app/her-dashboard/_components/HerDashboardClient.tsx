@@ -229,17 +229,15 @@ function HerTaskCard({ task, onDetail }: {
     <div className="relative bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid #e8f0e8' }}>
       <div className="absolute right-0 top-0 bottom-0 w-2 rounded-r-2xl" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
       <button type="button" onClick={onDetail} className="absolute inset-0 w-full h-full rounded-2xl z-0" />
-      <div className="relative flex items-center px-4 pr-6 py-4 pointer-events-none">
-        <div className="flex-1 min-w-0">
-          <p className={`font-medium text-base leading-snug ${isDone ? 'line-through opacity-40' : ''}`} style={{ color: '#2d4a30' }}>
+      <div className="relative flex flex-col items-center px-4 pr-6 py-4 pointer-events-none">
+          <p className={`font-medium text-base leading-snug text-center w-full ${isDone ? 'line-through opacity-40' : ''}`} style={{ color: '#2d4a30' }}>
             {task.title}
           </p>
           {task.due_date && (
-            <p className="text-sm mt-1" style={{ color: '#b8d0ba' }}>
+            <p className="text-sm mt-1 text-center" style={{ color: '#b8d0ba' }}>
               Due {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </p>
           )}
-        </div>
       </div>
     </div>
   )
