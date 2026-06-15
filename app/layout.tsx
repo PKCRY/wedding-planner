@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     title: "Wedding Planner",
     startupImage: [{ url: "/apple-touch-icon-v3.png" }],
   },
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
