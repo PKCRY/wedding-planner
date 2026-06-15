@@ -27,18 +27,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // last_seen and inactivity_level are stored in push_subscriptions.subscription JSONB
+  // to avoid needing a separate user_last_seen table
   const { data: row } = await supabase
-    .from('user_last_seen')
-    .select('last_seen, inactivity_level')
+    .from('push_subscriptions')
+    .select('subscription, updated_at')
     .eq('user_id', 'nick')
     .single()
 
   if (!row) {
-    return NextResponse.json({ ok: true, reason: 'no last_seen record — Nick has never opened the app' })
+    return NextResponse.json({ ok: true, reason: 'no push subscription for nick yet' })
   }
 
-  const hoursSince = (Date.now() - new Date(row.last_seen).getTime()) / 3_600_000
-  const currentLevel: number = row.inactivity_level ?? 0
+  const lastSeen: string = row.subscription._last_seen ?? row.updated_at
+  const hoursSince = (Date.now() - new Date(lastSeen).getTime()) / 3_600_000
+  const currentLevel: number = row.subscription._inactivity_level ?? 0
 
   let targetLevel = 0
   for (let i = 0; i < LEVELS.length; i++) {
@@ -51,26 +54,19 @@ export async function POST(req: NextRequest) {
 
   const level = LEVELS[targetLevel - 1]
 
-  const { data: subs } = await supabase
-    .from('push_subscriptions')
-    .select('subscription')
-    .eq('user_id', 'nick')
+  const payload = JSON.stringify({
+    title: 'Wedding Planner — Hey Nick! 👋',
+    body: level.message,
+    url: '/dashboard',
+  })
 
-  if (subs?.length) {
-    const payload = JSON.stringify({
-      title: 'Wedding Planner — Hey Nick! 👋',
-      body: level.message,
-      url: '/dashboard',
-    })
-    await Promise.allSettled(
-      subs.map(({ subscription }) => webpush.sendNotification(subscription, payload))
-    )
-  }
+  await webpush.sendNotification(row.subscription, payload)
 
+  // Update the inactivity level in-place within the subscription JSONB
   await supabase
-    .from('user_last_seen')
-    .update({ inactivity_level: targetLevel })
+    .from('push_subscriptions')
+    .update({ subscription: { ...row.subscription, _inactivity_level: targetLevel } })
     .eq('user_id', 'nick')
 
-  return NextResponse.json({ ok: true, sent: subs?.length ?? 0, level: targetLevel, hoursSince: Math.round(hoursSince) })
+  return NextResponse.json({ ok: true, sent: 1, level: targetLevel, hoursSince: Math.round(hoursSince) })
 }

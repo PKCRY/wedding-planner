@@ -58,3 +58,19 @@ ALTER TABLE tasks
 -- ── Migrate old field value if upgrading ──────────────────────────────────
 
 UPDATE tasks SET assigned_to = 'siobhan' WHERE assigned_to = 'fiance';
+
+-- ── Inventory ─────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS inventory (
+  id                bigserial    PRIMARY KEY,
+  name              text         NOT NULL,
+  quantity          text         NOT NULL DEFAULT '',
+  status            text         NOT NULL DEFAULT 'needed'
+                                 CHECK (status IN ('needed', 'partial', 'acquired')),
+  responsible_party text         NOT NULL DEFAULT '',
+  notes             text         NOT NULL DEFAULT '',
+  sort_order        integer      NOT NULL DEFAULT 999,
+  created_at        timestamptz  NOT NULL DEFAULT now(),
+  created_by        text         NOT NULL DEFAULT ''
+);
+ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;

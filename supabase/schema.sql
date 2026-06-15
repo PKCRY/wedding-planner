@@ -1,4 +1,5 @@
--- Run this in your Supabase SQL Editor (supabase.com → project → SQL Editor)
+-- DEPRECATED: use setup.sql instead — it is the canonical, idempotent setup script.
+-- This file is kept for historical reference only.
 
 create table if not exists tasks (
   id          bigserial primary key,
@@ -19,26 +20,5 @@ create table if not exists push_subscriptions (
   updated_at   timestamptz not null default now()
 );
 
--- Disable RLS (we handle auth ourselves via iron-session)
-alter table tasks disable row level security;
+alter table tasks              disable row level security;
 alter table push_subscriptions disable row level security;
-
-create table if not exists inventory (
-  id               bigserial primary key,
-  name             text not null,
-  quantity         text not null default '',
-  status           text not null default 'needed' check (status in ('needed', 'partial', 'acquired')),
-  responsible_party text not null default '',
-  notes            text not null default '',
-  sort_order       integer not null default 999,
-  created_at       timestamptz not null default now(),
-  created_by       text not null default ''
-);
-alter table inventory disable row level security;
-
-create table if not exists user_last_seen (
-  user_id          text primary key,
-  last_seen        timestamptz not null default now(),
-  inactivity_level integer not null default 0
-);
-alter table user_last_seen disable row level security;
