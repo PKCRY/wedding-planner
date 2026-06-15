@@ -129,7 +129,7 @@ export default function HerDashboardClient({
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f5f7f5' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ backgroundColor: '#f5f7f5' }}>
 
       {/* Header */}
       <header className="bg-white sticky top-0 z-10" style={{ borderBottom: '1px solid #e4ede4' }}>
@@ -282,7 +282,10 @@ export default function HerDashboardClient({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, description }),
           })
-          if (res.ok) setShowAdd(false)
+          if (res.ok) {
+            await refreshList()
+            setShowAdd(false)
+          }
         }} />
       )}
     </div>
@@ -328,7 +331,7 @@ function HerTaskCard({ task, onDetail }: {
 
   return (
     <div
-      className="relative bg-white rounded-2xl overflow-hidden active:scale-[0.98] transition-transform"
+      className="relative bg-white rounded-2xl overflow-hidden"
       style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e4ede4' }}
     >
       <div className="absolute right-0 top-0 bottom-0 w-[5px]" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
@@ -477,7 +480,7 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
                 className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none resize-none"
                 style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
               />
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-2">
                 <div>
                   <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Due date</p>
                   <input
@@ -548,7 +551,7 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
 
               {/* Meta chips */}
               {(task.due_date || task.completed_date || task.responsible_party || task.important_contacts) && (
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-2">
                   {task.due_date && (
                     <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
                       <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Due date</p>

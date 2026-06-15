@@ -190,8 +190,8 @@ export default function DashboardClient({
 
           {/* Left: tasks (full width on mobile, 2/3 on lg) */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Tabs */}
-            <div className="flex gap-1 rounded-xl p-1 overflow-x-auto" style={{ backgroundColor: '#d8e8d8' }}>
+            {/* Tabs — scrollable so all tabs are always reachable on small screens */}
+            <div className="flex gap-1 rounded-xl p-1 overflow-x-auto" style={{ backgroundColor: '#d8e8d8', WebkitOverflowScrolling: 'touch' }}>
               {([
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
@@ -202,8 +202,8 @@ export default function DashboardClient({
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`flex-1 text-sm font-medium rounded-lg transition-colors ${lgHide ? 'lg:hidden' : ''}`}
-                  style={{ backgroundColor: tab === key ? '#fff' : 'transparent', color: tab === key ? '#2d4a30' : '#7a9e7e', minHeight: 44 }}
+                  className={`shrink-0 text-sm font-medium rounded-lg transition-colors ${lgHide ? 'lg:hidden' : ''}`}
+                  style={{ backgroundColor: tab === key ? '#fff' : 'transparent', color: tab === key ? '#2d4a30' : '#7a9e7e', minHeight: 44, minWidth: 72, padding: '0 12px' }}
                 >
                   {label}
                 </button>
