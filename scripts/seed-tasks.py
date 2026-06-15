@@ -13,13 +13,14 @@ import json, os, re, sys
 import openpyxl
 import urllib.request
 
-# Load .env.local
+# Load .env.local (optional — falls back to env vars already set in shell)
 env_path = os.path.join(os.path.dirname(__file__), '..', '.env.local')
-with open(env_path) as f:
-    for line in f:
-        m = re.match(r'^([A-Z_]+)="?([^"\n]*)"?', line.strip())
-        if m:
-            os.environ.setdefault(m.group(1), m.group(2))
+if os.path.exists(env_path):
+    with open(env_path) as f:
+        for line in f:
+            m = re.match(r'^([A-Z_]+)="?([^"\n]*)"?', line.strip())
+            if m:
+                os.environ.setdefault(m.group(1), m.group(2))
 
 SUPABASE_URL = os.environ['SUPABASE_URL']
 SUPABASE_KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
@@ -101,6 +102,7 @@ for row in ws.iter_rows(min_row=2):
         'completed_date':      None,
         'blocked_by':          '',
         'task_comments':       [],
+        'completed_by':        '',
         'created_by':          'import',
     })
     sort_order += 1
