@@ -7,10 +7,11 @@ import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
 import PushManagerInline from '@/components/PushManagerInline'
 
-const PRIORITY_DOT: Record<string, string> = {
-  high: '#c0607a',
-  medium: '#d4849a',
-  low: '#7a9e7e',
+const STATUS_BAR: Record<string, string> = {
+  done:        '#7a9e7e',
+  in_progress: '#e6c84a',
+  pending:     '#d4849a',
+  blocked:     '#c0607a',
 }
 
 const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
@@ -29,21 +30,15 @@ type Tab = 'tasks' | 'calendar'
 export default function HerDashboardClient({
   user,
   initialTop5,
-  totalAssigned,
-  totalDone,
   initialEvents,
 }: {
   user: SessionUser
   initialTop5: Task[]
-  totalAssigned: number
-  totalDone: number
   initialEvents: Event[]
 }) {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>(initialTop5)
   const [events, setEvents] = useState<Event[]>(initialEvents)
-  const [done, setDone] = useState(totalDone)
-  const [total] = useState(totalAssigned)
   const [tab, setTab] = useState<Tab>('tasks')
   const [showAdd, setShowAdd] = useState(false)
   const [detailTask, setDetailTask] = useState<Task | null>(null)
@@ -59,7 +54,6 @@ export default function HerDashboardClient({
     if (listRes.ok) {
       const next = await listRes.json() as Task[]
       setTasks(next)
-      setDone(parseInt(listRes.headers.get('x-done') ?? '0'))
       return next
     }
     return tasks
@@ -108,8 +102,6 @@ export default function HerDashboardClient({
     setEvents(prev => prev.filter(e => e.id !== id))
   }
 
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0
-
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f0f4f0' }}>
       <header className="bg-white sticky top-0 z-10" style={{ borderBottom: '1px solid #b8d0ba' }}>
@@ -136,21 +128,6 @@ export default function HerDashboardClient({
       </header>
 
       <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4">
-        {/* Progress */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: '1px solid #d8e8d8' }}>
-          <div className="flex justify-between text-xs mb-2" style={{ color: '#9db89f' }}>
-            <span>Progress</span>
-            <span>{done} of {total} done ({pct}%)</span>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#d8e8d8' }}>
-            <div className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${pct}%`, backgroundColor: '#d4849a' }} />
-          </div>
-          {total > 0 && done === total && (
-            <p className="text-center text-xs mt-2 font-medium" style={{ color: '#7a9e7e' }}>All done! You&apos;re amazing!</p>
-          )}
-        </div>
-
         {/* Tabs */}
         <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: '#d8e8d8' }}>
           {(['tasks', 'calendar'] as Tab[]).map(t => (
@@ -175,8 +152,6 @@ export default function HerDashboardClient({
                 <HerTaskCard
                   key={task.id}
                   task={task}
-                  onMarkDone={() => setStatus(task, 'done')}
-                  onStart={() => setStatus(task, 'in_progress')}
                   onDetail={() => setDetailTask(task)}
                 />
               ))}
@@ -199,7 +174,6 @@ export default function HerDashboardClient({
         <TaskDetailModal
           task={detailTask}
           onClose={() => setDetailTask(null)}
-          onStart={() => setStatus(detailTask, 'in_progress')}
           onMarkDone={() => setStatus(detailTask, 'done')}
           onAddComment={text => addComment(detailTask.id, text)}
         />
@@ -245,96 +219,46 @@ export default function HerDashboardClient({
   )
 }
 
-function HerTaskCard({ task, onMarkDone, onStart, onDetail }: {
+function HerTaskCard({ task, onDetail }: {
   task: Task
-  onMarkDone: () => void
-  onStart: () => void
   onDetail: () => void
 }) {
+  const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
   const isDone = task.status === 'done'
-  const isActive = task.status === 'in_progress'
 
   return (
-    // Outer button = reliable tap target on all platforms
-    <button
-      type="button"
-      onClick={onDetail}
-      className="w-full text-left bg-white rounded-2xl shadow-sm block"
-      style={{ border: `1px solid ${isActive ? '#b8d0ba' : '#d8e8d8'}` }}
-    >
-      <div className="flex items-start gap-3 p-4">
-        {/* Checkbox — div with role so it can stop propagation without nesting buttons */}
-        <div
-          role="checkbox"
-          aria-checked={isDone}
-          tabIndex={0}
-          onClick={e => { e.stopPropagation(); onMarkDone() }}
-          onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), onMarkDone())}
-          className="w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
-          style={{ backgroundColor: isDone ? '#d4849a' : 'transparent', borderColor: isDone ? '#d4849a' : '#b8d0ba', color: '#fff', minWidth: 32 }}
-        >
-          {isDone && <span className="text-xs leading-none">✓</span>}
-        </div>
-
+    <div className="relative bg-white rounded-xl shadow-sm overflow-hidden" style={{ border: '1px solid #d8e8d8' }}>
+      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
+      <button type="button" onClick={onDetail} className="absolute inset-0 w-full h-full rounded-xl z-0" />
+      <div className="relative flex items-center gap-2 pl-3 pr-3 py-3 pointer-events-none">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PRIORITY_DOT[task.priority] }} />
-            {isActive && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}>
-                In Progress
-              </span>
-            )}
-            {task.status === 'blocked' && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
-                Blocked
-              </span>
-            )}
+          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: st.bg, color: st.color }}>
+              {STATUS_LABEL[task.status]}
+            </span>
           </div>
-
-          <h3 className={`font-medium text-sm leading-snug ${isDone ? 'line-through' : ''}`} style={{ color: '#2d4a30' }}>
-            {task.title}
-          </h3>
-
-          {task.description && (
-            <p className="text-xs mt-0.5 line-clamp-1" style={{ color: '#9db89f' }}>{task.description}</p>
-          )}
-
+          <p className={`font-medium text-sm leading-snug ${isDone ? 'line-through' : ''}`} style={{ color: '#2d4a30' }}>{task.title}</p>
           {task.due_date && (
-            <p className="text-xs mt-1" style={{ color: '#b8d0ba' }}>
+            <p className="text-xs mt-0.5" style={{ color: '#b8d0ba' }}>
               Due {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </p>
           )}
         </div>
-
-        {/* Start — div with role so it can stop propagation */}
-        {!isDone && !isActive && (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={e => { e.stopPropagation(); onStart() }}
-            onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), onStart())}
-            className="text-sm px-3 rounded-xl font-medium shrink-0 flex items-center"
-            style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}
-          >
-            Start
-          </div>
-        )}
       </div>
-    </button>
+    </div>
   )
 }
 
-function TaskDetailModal({ task, onClose, onStart, onMarkDone, onAddComment }: {
+function TaskDetailModal({ task, onClose, onMarkDone, onAddComment }: {
   task: Task
   onClose: () => void
-  onStart: () => void
   onMarkDone: () => void
   onAddComment: (text: string) => Promise<void>
 }) {
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
+  const [confirmDone, setConfirmDone] = useState(false)
   const isDone = task.status === 'done'
-  const isActive = task.status === 'in_progress'
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
 
   async function submitComment() {
@@ -354,28 +278,23 @@ function TaskDetailModal({ task, onClose, onStart, onMarkDone, onAddComment }: {
         {/* Header */}
         <div className="flex items-center justify-between p-4 sticky top-0 bg-white rounded-t-2xl z-10"
           style={{ borderBottom: '1px solid #d8e8d8' }}>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: st.bg, color: st.color }}>
-              {STATUS_LABEL[task.status]}
-            </span>
-          </div>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: st.bg, color: st.color }}>
+            {STATUS_LABEL[task.status]}
+          </span>
           <button onClick={onClose}
             className="w-8 h-8 flex items-center justify-center text-xl rounded-full shrink-0"
             style={{ color: '#9db89f', backgroundColor: '#f0f4f0' }}>×</button>
         </div>
 
         <div className="p-4 space-y-4 modal-bottom">
-          {/* Title */}
           <h2 className={`text-lg font-semibold leading-snug ${isDone ? 'line-through' : ''}`} style={{ color: '#2d4a30' }}>
             {task.title}
           </h2>
 
-          {/* Description */}
           {task.description && (
             <p className="text-sm leading-relaxed" style={{ color: '#5a7d5e' }}>{task.description}</p>
           )}
 
-          {/* Meta grid */}
           <div className="grid grid-cols-2 gap-3">
             {task.due_date && (
               <div className="rounded-xl p-3" style={{ backgroundColor: '#f0f4f0' }}>
@@ -407,7 +326,6 @@ function TaskDetailModal({ task, onClose, onStart, onMarkDone, onAddComment }: {
             )}
           </div>
 
-          {/* Blocked by */}
           {task.status === 'blocked' && task.blocked_by && (
             <div className="rounded-xl p-3" style={{ backgroundColor: '#f0e8ec' }}>
               <p className="text-xs mb-0.5" style={{ color: '#c0607a' }}>Blocked by</p>
@@ -415,22 +333,33 @@ function TaskDetailModal({ task, onClose, onStart, onMarkDone, onAddComment }: {
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* Mark done — two-step confirm */}
           {!isDone && (
-            <div className="flex gap-2">
-              {!isActive && (
-                <button onClick={() => { onStart(); onClose() }}
-                  className="flex-1 font-medium rounded-xl text-sm"
-                  style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 48 }}>
-                  Mark In Progress
-                </button>
-              )}
-              <button onClick={() => { onMarkDone(); onClose() }}
-                className="flex-1 font-medium rounded-xl text-sm text-white"
+            confirmDone ? (
+              <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: '#f0e8ec', border: '1px solid #d4849a' }}>
+                <p className="text-sm font-semibold text-center" style={{ color: '#c0607a' }}>
+                  Are you sure this is complete?
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirmDone(false)}
+                    className="flex-1 font-medium rounded-xl text-sm"
+                    style={{ backgroundColor: '#f0f4f0', color: '#9db89f', minHeight: 48 }}>
+                    Not yet
+                  </button>
+                  <button onClick={() => { onMarkDone(); onClose() }}
+                    className="flex-1 font-medium rounded-xl text-sm text-white"
+                    style={{ backgroundColor: '#d4849a', minHeight: 48 }}>
+                    Yes, it&apos;s done! ✓
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDone(true)}
+                className="w-full font-medium rounded-xl text-sm text-white"
                 style={{ backgroundColor: '#d4849a', minHeight: 48 }}>
                 Mark Done
               </button>
-            </div>
+            )
           )}
 
           {/* Comments */}
@@ -438,11 +367,9 @@ function TaskDetailModal({ task, onClose, onStart, onMarkDone, onAddComment }: {
             <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>
               Notes & Comments {(task.task_comments?.length ?? 0) > 0 && `(${task.task_comments.length})`}
             </p>
-
             {(task.task_comments ?? []).length === 0 && (
               <p className="text-sm" style={{ color: '#b8d0ba' }}>No notes yet.</p>
             )}
-
             <div className="space-y-2">
               {(task.task_comments ?? []).map((c: TaskComment, i: number) => (
                 <div key={i} className="rounded-xl px-3 py-2.5" style={{ backgroundColor: '#f0f4f0' }}>
@@ -456,7 +383,6 @@ function TaskDetailModal({ task, onClose, onStart, onMarkDone, onAddComment }: {
                 </div>
               ))}
             </div>
-
             <div className="flex gap-2">
               <input
                 value={commentText}

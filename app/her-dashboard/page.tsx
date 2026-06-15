@@ -21,14 +21,10 @@ export default async function HerDashboardPage() {
   const sorted = [...allTasks].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
   const active = sorted.filter(t => t.status !== 'done')
   const top5 = active.slice(0, 5)
-  const totalDone = allTasks.filter(t => t.status === 'done').length
-
   return (
     <HerDashboardClient
       user={session.user}
       initialTop5={top5}
-      totalAssigned={allTasks.length}
-      totalDone={totalDone}
       initialEvents={events}
     />
   )
