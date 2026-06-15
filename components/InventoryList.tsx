@@ -66,7 +66,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
-      if (res.ok) setItems(prev => [...prev, await res.json() as InventoryItem])
+      if (res.ok) { const item = await res.json() as InventoryItem; setItems(prev => [...prev, item]) }
     } else {
       const res = await fetch(`/api/inventory/${id}`, {
         method: 'PATCH',
