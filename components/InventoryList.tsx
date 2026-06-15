@@ -357,6 +357,7 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
   const [status, setStatus] = useState<InventoryItem['status']>(item?.status ?? 'needed')
   const [responsibleParty, setResponsibleParty] = useState(item?.responsible_party ?? '')
   const [notes, setNotes] = useState(item?.notes ?? '')
+  const [sortOrder, setSortOrder] = useState<string>(item?.sort_order != null ? String(item.sort_order) : '')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -364,7 +365,8 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
     e.preventDefault()
     if (!name.trim()) return
     setSaving(true)
-    await onSave({ name: name.trim(), quantity, status, responsible_party: responsibleParty, notes })
+    const parsed = sortOrder !== '' ? parseInt(sortOrder, 10) : undefined
+    await onSave({ name: name.trim(), quantity, status, responsible_party: responsibleParty, notes, ...(parsed != null && !isNaN(parsed) ? { sort_order: parsed } : {}) })
     setSaving(false)
   }
 
@@ -418,13 +420,24 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
             <option value="partial">In Progress</option>
             <option value="acquired">Acquired</option>
           </select>
-          <input
-            value={responsibleParty}
-            onChange={e => setResponsibleParty(e.target.value)}
-            placeholder="Responsible party (optional)"
-            className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none"
-            style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
-          />
+          <div className="flex gap-2">
+            <input
+              value={responsibleParty}
+              onChange={e => setResponsibleParty(e.target.value)}
+              placeholder="Responsible party (optional)"
+              className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+            />
+            <input
+              type="number"
+              value={sortOrder}
+              onChange={e => setSortOrder(e.target.value)}
+              placeholder="Position"
+              min={1}
+              className="w-24 rounded-2xl px-4 py-3 text-sm focus:outline-none text-center"
+              style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+            />
+          </div>
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
