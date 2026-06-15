@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Wedding Planner",
+    title: "Wedding",
   },
   icons: {
     icon: [
@@ -26,9 +26,8 @@ export const metadata: Metadata = {
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-    ],
+    // app/apple-icon.png handles apple-touch-icon via file-based metadata
+    // (Next.js injects a content-hashed URL so iOS can't serve a stale cached icon)
   },
 };
 
