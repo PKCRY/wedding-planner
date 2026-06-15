@@ -20,7 +20,7 @@ export const metadata: Metadata = {
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
     ],
     apple: [
-      { url: "/apple-touch-icon.png?v=2", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon-v3.png", sizes: "180x180", type: "image/png" },
     ],
   },
 };
@@ -41,6 +41,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
+      <head>
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-v3.png" />
+      </head>
       <body className="min-h-full flex flex-col safe-top">
         <ServiceWorkerRegistration />
         <InstallPrompt />
