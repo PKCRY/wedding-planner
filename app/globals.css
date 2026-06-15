@@ -48,3 +48,11 @@ body {
   -webkit-font-smoothing: antialiased;
   background: var(--sage-light);
 }
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
