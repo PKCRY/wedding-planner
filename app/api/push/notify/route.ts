@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { to, title, body } = await req.json()
+  const { to, title, body, url, badge_count } = await req.json()
   if (!to || !title) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
   let query = supabase.from('push_subscriptions').select('subscription')
@@ -19,7 +19,12 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!rows?.length) return NextResponse.json({ error: 'No subscribers found' }, { status: 404 })
 
-  const payload = JSON.stringify({ title, body: body || '' })
+  const payload = JSON.stringify({
+    title,
+    body: body || '',
+    url: url || '/',
+    ...(badge_count !== undefined && { badge_count }),
+  })
 
   await Promise.allSettled(
     rows.map(({ subscription }) =>

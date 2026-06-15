@@ -14,6 +14,12 @@ const USERS = {
     role: 'admin' as const,
     password: 'CampCard2026',
   },
+  mom: {
+    id: 'mom',
+    name: 'Mom',
+    role: 'admin' as const,
+    password: 'SecretCampCard2026',
+  },
   motherofthebride: {
     id: 'motherofthebride',
     name: 'Mom',

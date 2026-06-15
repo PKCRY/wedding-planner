@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session'
 import { supabase } from '@/lib/db'
 import type { Task, Event } from '@/lib/db'
 import HerDashboardClient from './_components/HerDashboardClient'
+import Heartbeat from '@/components/Heartbeat'
 
 export default async function HerDashboardPage() {
   const session = await getSession()
@@ -21,11 +22,12 @@ export default async function HerDashboardPage() {
   const sorted = [...allTasks].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
   const active = sorted.filter(t => t.status !== 'done')
   const top5 = active.slice(0, 5)
-  return (
+  return (<>
+    <Heartbeat />
     <HerDashboardClient
       user={session.user}
       initialTop5={top5}
       initialEvents={events}
     />
-  )
+  </>)
 }
