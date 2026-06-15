@@ -223,27 +223,23 @@ function HerTaskCard({ task, onDetail }: {
   task: Task
   onDetail: () => void
 }) {
-  const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
   const isDone = task.status === 'done'
 
   return (
-    <div className="relative bg-white rounded-xl shadow-sm overflow-hidden" style={{ border: '1px solid #d8e8d8' }}>
-      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
-      <button type="button" onClick={onDetail} className="absolute inset-0 w-full h-full rounded-xl z-0" />
-      <div className="relative flex items-center gap-2 pl-3 pr-3 py-3 pointer-events-none">
+    <div className="relative bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid #e8f0e8' }}>
+      <button type="button" onClick={onDetail} className="absolute inset-0 w-full h-full rounded-2xl z-0" />
+      <div className="relative flex items-center gap-4 px-4 py-4 pointer-events-none">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: st.bg, color: st.color }}>
-              {STATUS_LABEL[task.status]}
-            </span>
-          </div>
-          <p className={`font-medium text-sm leading-snug ${isDone ? 'line-through' : ''}`} style={{ color: '#2d4a30' }}>{task.title}</p>
+          <p className={`font-medium text-base leading-snug ${isDone ? 'line-through opacity-40' : ''}`} style={{ color: '#2d4a30' }}>
+            {task.title}
+          </p>
           {task.due_date && (
-            <p className="text-xs mt-0.5" style={{ color: '#b8d0ba' }}>
+            <p className="text-sm mt-1" style={{ color: '#b8d0ba' }}>
               Due {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </p>
           )}
         </div>
+        <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
       </div>
     </div>
   )
