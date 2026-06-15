@@ -219,7 +219,7 @@ export default function DashboardClient({
                       className="flex-1 text-sm font-medium rounded-lg transition-colors"
                       style={{ backgroundColor: filter === f ? '#fff' : 'transparent', color: filter === f ? '#2d4a30' : '#7a9e7e', minHeight: 44 }}
                     >
-                      {f === 'all' ? 'All' : f === 'nick' ? 'Mine' : f === 'siobhan' ? 'Hers' : 'Both'}
+                      {f === 'all' ? 'All' : f === 'nick' ? (user.id === 'nick' ? 'Mine' : 'Nick\'s') : f === 'siobhan' ? 'Hers' : 'Both'}
                     </button>
                   ))}
                 </div>
