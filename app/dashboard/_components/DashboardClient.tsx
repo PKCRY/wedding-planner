@@ -31,7 +31,7 @@ const ASSIGN_LABEL: Record<string, string> = {
 }
 
 type Filter = 'all' | 'nick' | 'siobhan' | 'both'
-type Tab = 'tasks' | 'completed' | 'calendar' | 'inventory'
+type Tab = 'tasks' | 'completed' | 'calendar' | 'inventory' | 'notify'
 
 export default function DashboardClient({
   user,
@@ -196,6 +196,7 @@ export default function DashboardClient({
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
                 { key: 'inventory', label: 'Inventory' },
+                { key: 'notify',    label: '💬 Notify' },
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
               ] as { key: Tab; label: string; lgHide?: boolean }[]).map(({ key, label, lgHide }) => (
                 <button
@@ -249,6 +250,9 @@ export default function DashboardClient({
             {/* Inventory */}
             {tab === 'inventory' && <InventoryList isAdmin={true} />}
 
+            {/* Notify Siobhan */}
+            {tab === 'notify' && <NotifyTab />}
+
             {/* Calendar — mobile only when tab=calendar; always in right sidebar on lg */}
             {tab === 'calendar' && (
               <div className="lg:hidden">
@@ -264,8 +268,8 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {/* FAB — mobile only (desktop has header button), hidden on inventory tab */}
-      {tab !== 'inventory' && <button
+      {/* FAB — mobile only (desktop has header button), hidden on inventory/notify tabs */}
+      {tab !== 'inventory' && tab !== 'notify' && <button
         onClick={() => setShowCreate(true)}
         className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom sm:hidden"
         style={{ backgroundColor: '#d4849a' }}
@@ -778,6 +782,121 @@ function NotifyModal({ onClose }: { onClose: () => void }) {
           {status && <p className="text-sm text-center" style={{ color: '#7a9e7e' }}>{status}</p>}
           <button type="submit" className="w-full font-medium rounded-xl text-white" style={{ backgroundColor: '#d4849a', minHeight: 52 }}>
             Send
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+const QUICK_MESSAGES = [
+  { label: '👀 Check your tasks', title: 'Hey!', body: 'Can you take a look at your wedding tasks when you get a chance?' },
+  { label: '🌸 Quick reminder', title: 'Wedding reminder 💍', body: "Just a reminder to check in on the wedding planner today!" },
+  { label: '🔥 Needs attention', title: 'Something needs attention', body: 'There are a few things on your list that need to be sorted soon!' },
+  { label: '✅ We made progress!', title: 'Wedding update 🎉', body: 'Made some good progress today — check the planner for updates!' },
+  { label: '❓ Question for you', title: 'Quick question', body: '' },
+  { label: '📅 Date to check', title: 'Check the calendar', body: 'Take a look at the calendar — something important coming up!' },
+]
+
+function NotifyTab() {
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [flash, setFlash] = useState('')
+
+  async function send(e: React.FormEvent) {
+    e.preventDefault()
+    if (!title.trim()) return
+    setSending(true)
+    setFlash('')
+    const res = await fetch('/api/push/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: 'siobhan', title: title.trim(), body: body.trim(), url: '/her-dashboard' }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setFlash('Sent!')
+      setTitle('')
+      setBody('')
+    } else {
+      setFlash(data.error ?? 'Failed to send')
+    }
+    setSending(false)
+  }
+
+  function applyQuick(q: typeof QUICK_MESSAGES[0]) {
+    setTitle(q.title)
+    setBody(q.body)
+    setFlash('')
+  }
+
+  const inputStyle: React.CSSProperties = {
+    border: '1px solid #d8e8d8',
+    color: '#2d4a30',
+    backgroundColor: '#f5f7f5',
+    width: '100%',
+    borderRadius: 16,
+    padding: '12px 16px',
+    fontSize: 14,
+    outline: 'none',
+  }
+
+  return (
+    <div className="space-y-4 pb-24">
+      {/* Header */}
+      <div className="rounded-2xl p-4" style={{ backgroundColor: '#fce8ef', border: '1px solid #f0b8c8' }}>
+        <p className="font-semibold text-sm" style={{ color: '#c0607a' }}>Send to Siobhan 💍</p>
+        <p className="text-xs mt-0.5" style={{ color: '#d4849a' }}>She'll get a push notification on her phone</p>
+      </div>
+
+      {/* Quick messages */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#9db89f' }}>Quick send</p>
+        <div className="grid grid-cols-2 gap-2">
+          {QUICK_MESSAGES.map(q => (
+            <button
+              key={q.label}
+              onClick={() => applyQuick(q)}
+              className="text-left rounded-2xl px-3 py-2.5 text-xs font-medium"
+              style={{ backgroundColor: '#f0f4f0', color: '#2d4a30', border: '1px solid #e4ede4' }}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Compose */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#9db89f' }}>Compose</p>
+        <form onSubmit={send} className="space-y-2">
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Title"
+            required
+            style={inputStyle}
+          />
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder="Message (optional)"
+            rows={3}
+            style={{ ...inputStyle, resize: 'none' }}
+          />
+          {flash && (
+            <p className="text-sm text-center font-medium" style={{ color: flash === 'Sent!' ? '#2d6a30' : '#c0607a' }}>
+              {flash === 'Sent!' ? '✓ Notification sent!' : flash}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={sending || !title.trim()}
+            className="w-full font-semibold rounded-2xl text-white"
+            style={{ backgroundColor: '#d4849a', opacity: sending || !title.trim() ? 0.5 : 1, minHeight: 52 }}
+          >
+            {sending ? 'Sending...' : 'Send to Siobhan'}
           </button>
         </form>
       </div>
