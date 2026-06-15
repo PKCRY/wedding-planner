@@ -56,3 +56,9 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+.drag-list {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}

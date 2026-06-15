@@ -183,6 +183,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           All items acquired!
         </div>
       )}
+      <div className="drag-list">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={active.map(i => i.id)} strategy={verticalListSortingStrategy}>
           {active.map(item => (
@@ -197,6 +198,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           ))}
         </SortableContext>
       </DndContext>
+      </div>
 
       {/* Acquired section */}
       {acquired.length > 0 && (
@@ -270,7 +272,7 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone, dragHandle }: 
   return (
     <div
       className="relative bg-white rounded-2xl overflow-hidden"
-      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e4ede4' }}
+      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e4ede4', userSelect: 'none', WebkitUserSelect: 'none' }}
     >
       <div className="pl-4 pr-4 py-3.5 flex items-center gap-3">
         {/* Checkbox to mark acquired / unmark */}
@@ -324,7 +326,7 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone, dragHandle }: 
             <button
               {...dragHandle}
               className="touch-none p-1.5 rounded cursor-grab active:cursor-grabbing"
-              style={{ color: '#c8dcc8', fontSize: 18, lineHeight: 1 }}
+              style={{ color: '#c8dcc8', fontSize: 18, lineHeight: 1, WebkitTouchCallout: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               ⠿
             </button>
