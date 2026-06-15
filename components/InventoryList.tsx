@@ -169,7 +169,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           isAdmin={isAdmin}
           onClose={() => setEditItem(null)}
           onSave={async data => { await saveItem(editItem.id, data); setEditItem(null) }}
-          onDelete={isAdmin ? async () => { await deleteItem(editItem.id); setEditItem(null) } : undefined}
+          onDelete={async () => { await deleteItem(editItem.id); setEditItem(null) }}
         />
       )}
 
