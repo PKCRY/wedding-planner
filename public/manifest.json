@@ -4,7 +4,7 @@
   "description": "Our wedding planning dashboard",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f0f4f0",
+  "background_color": "#ffffff",
   "theme_color": "#7a9e7e",
   "orientation": "portrait",
   "icons": [
