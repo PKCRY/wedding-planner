@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { supabase } from '@/lib/db'
 import type { TaskComment } from '@/lib/db'
-import { sendPushToAll } from '@/lib/notifications'
+import { sendPushToAll, taskDonePayload, taskStartedPayload } from '@/lib/notifications'
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -62,9 +62,9 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     if (patch.status === 'done') {
-      sendPushToAll({ title: '🎉 Task Complete!', body: `${session.user.name} just completed: ${data.title}`, url: '/' })
+      sendPushToAll(taskDonePayload(session.user.name, data.title))
     } else if (patch.status === 'in_progress') {
-      sendPushToAll({ title: 'Task Started', body: `${session.user.name} started working on: ${data.title}`, url: '/' })
+      sendPushToAll(taskStartedPayload(session.user.name, data.title))
     }
 
     return NextResponse.json(data)
@@ -115,9 +115,9 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (updates.status === 'done') {
-    sendPushToAll({ title: '🎉 Task Complete!', body: `${session.user.name} just completed: ${data.title}`, url: '/' })
+    sendPushToAll(taskDonePayload(session.user.name, data.title))
   } else if (updates.status === 'in_progress') {
-    sendPushToAll({ title: 'Task Started', body: `${session.user.name} started working on: ${data.title}`, url: '/' })
+    sendPushToAll(taskStartedPayload(session.user.name, data.title))
   }
 
   return NextResponse.json(data)
