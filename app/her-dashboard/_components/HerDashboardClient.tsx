@@ -227,8 +227,9 @@ function HerTaskCard({ task, onDetail }: {
 
   return (
     <div className="relative bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid #e8f0e8' }}>
+      <div className="absolute right-0 top-0 bottom-0 w-2 rounded-r-2xl" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
       <button type="button" onClick={onDetail} className="absolute inset-0 w-full h-full rounded-2xl z-0" />
-      <div className="relative flex items-center gap-4 px-4 py-4 pointer-events-none">
+      <div className="relative flex items-center px-4 pr-6 py-4 pointer-events-none">
         <div className="flex-1 min-w-0">
           <p className={`font-medium text-base leading-snug ${isDone ? 'line-through opacity-40' : ''}`} style={{ color: '#2d4a30' }}>
             {task.title}
@@ -239,7 +240,6 @@ function HerTaskCard({ task, onDetail }: {
             </p>
           )}
         </div>
-        <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
       </div>
     </div>
   )
