@@ -6,6 +6,7 @@ import type { Task, Event, TaskComment } from '@/lib/db'
 import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
 import PushManagerInline from '@/components/PushManagerInline'
+import InventoryList from '@/components/InventoryList'
 
 const STATUS_BAR: Record<string, string> = {
   done:        '#7a9e7e',  // green
@@ -30,7 +31,7 @@ const ASSIGN_LABEL: Record<string, string> = {
 }
 
 type Filter = 'all' | 'nick' | 'siobhan' | 'both'
-type Tab = 'tasks' | 'completed' | 'calendar'
+type Tab = 'tasks' | 'completed' | 'calendar' | 'inventory'
 
 export default function DashboardClient({
   user,
@@ -194,6 +195,7 @@ export default function DashboardClient({
               {([
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
+                { key: 'inventory', label: 'Inventory' },
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
               ] as { key: Tab; label: string; lgHide?: boolean }[]).map(({ key, label, lgHide }) => (
                 <button
@@ -207,9 +209,9 @@ export default function DashboardClient({
               ))}
             </div>
 
-            {/* Task list — shown when tab=tasks or completed; hidden when calendar */}
-            {(tab === 'tasks' || tab === 'completed' || true) && (
-              <div className={tab === 'calendar' ? 'hidden lg:block' : ''}>
+            {/* Task list */}
+            {(tab === 'tasks' || tab === 'completed') && (
+              <div>
                 {/* Filter */}
                 <div className="flex gap-1 rounded-xl p-1 mb-4" style={{ backgroundColor: '#e8f0e8' }}>
                   {(['all', 'nick', 'siobhan', 'both'] as Filter[]).map(f => (
@@ -244,6 +246,9 @@ export default function DashboardClient({
               </div>
             )}
 
+            {/* Inventory */}
+            {tab === 'inventory' && <InventoryList isAdmin={true} />}
+
             {/* Calendar — mobile only when tab=calendar; always in right sidebar on lg */}
             {tab === 'calendar' && (
               <div className="lg:hidden">
@@ -259,14 +264,14 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {/* FAB — mobile only (desktop has header button) */}
-      <button
+      {/* FAB — mobile only (desktop has header button), hidden on inventory tab */}
+      {tab !== 'inventory' && <button
         onClick={() => setShowCreate(true)}
         className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom sm:hidden"
         style={{ backgroundColor: '#d4849a' }}
       >
         +
-      </button>
+      </button>}
 
       {showCreate && (
         <TaskModal

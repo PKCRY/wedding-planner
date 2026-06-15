@@ -1,0 +1,115 @@
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/session'
+import { supabase } from '@/lib/db'
+
+// Sourced from All Inventory sheet. Status col (A) = quantity on hand; Number col (B) = qty note.
+const ITEMS: { name: string; quantity: string; status: 'needed' | 'partial' | 'acquired'; responsible_party: string; notes: string }[] = [
+  { name: '200 Wedding Invitations',           quantity: '200',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wedding dress',                     quantity: '',     status: 'needed',   responsible_party: 'Siobhan', notes: '' },
+  { name: 'Wedding shoes Siobhan',             quantity: '',     status: 'needed',   responsible_party: 'Siobhan', notes: '' },
+  { name: 'Dance shoes',                       quantity: '',     status: 'needed',   responsible_party: 'Siobhan', notes: '' },
+  { name: 'Wedding veil',                      quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Makeup',                            quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Jewelry',                           quantity: '',     status: 'needed',   responsible_party: 'Siobhan', notes: '' },
+  { name: 'Wedding rings',                     quantity: '',     status: 'needed',   responsible_party: 'Nick',    notes: '' },
+  { name: 'Tux',                               quantity: '',     status: 'needed',   responsible_party: 'Nick',    notes: '' },
+  { name: 'Bowtie',                            quantity: '',     status: 'needed',   responsible_party: 'Nick',    notes: '' },
+  { name: 'Dress shoes Nick',                  quantity: '',     status: 'needed',   responsible_party: 'Nick',    notes: '' },
+  { name: 'Wildflower socks Nick',             quantity: '',     status: 'needed',   responsible_party: 'Nick',    notes: '' },
+  { name: '210 wedding booklets',              quantity: '210',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wedding cake',                      quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wine (wedding)',                    quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Beer (wedding)',                    quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Signature drink items',             quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Desserts',                          quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '220 plastic water goblets',         quantity: '220',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '~200 bud vases',                   quantity: '~200', status: 'partial',  responsible_party: '',        notes: 'Have ~100' },
+  { name: '220 cloth napkins',                 quantity: '220',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '20 tablecloths for 8" tables',      quantity: '20',   status: 'partial',  responsible_party: '',        notes: 'Have 19' },
+  { name: '8 tablecloths for 6" tables',       quantity: '8',    status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '220-300 hot cups',                  quantity: '220-300', status: 'needed', responsible_party: '',       notes: '' },
+  { name: '200 nice plastic drinking cups',    quantity: '200',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '500 cheap plates',                  quantity: '500',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '500 cheap drinking cups',           quantity: '500',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '20 paper towel rolls',              quantity: '20',   status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '500 cheap silverware',              quantity: '500',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Game board sign',                   quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Gold frame',                        quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Until We Meet Again frame',         quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Pictures for Until We Meet Again',  quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Picnic basket for cards',           quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Embroidered napkin for picnic basket', quantity: '', status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Bar menu',                          quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Family tree sign',                  quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wedding photos from family',        quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: "S'more sign",                       quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Graham crackers',                   quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Marshmallows',                      quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Hershey bars',                      quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: "Serving plates for s'more items",   quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Phone sign for Church',             quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Seating chart',                     quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Table numbers',                     quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Bucket list sign',                  quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wooden bucket',                     quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'QR code sign',                      quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Cigar bar sign',                    quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Photo booth items',                 quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Chips (rehearsal)',                 quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Hot dogs (rehearsal)',              quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Burgers (rehearsal)',               quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Ketchup',                           quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Buns',                              quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Mustard',                           quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Cheese',                            quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Beer (rehearsal)',                  quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wine (rehearsal)',                  quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Water',                             quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Soda',                              quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '100 weekend booklets',              quantity: '100',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Board games for wedding loft',      quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Items for wedding olympics',        quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Olympic flag',                      quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Olympic t-shirts',                  quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wildflowers for bridesmaids',       quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wildflowers for altar',             quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Wildflowers for vases',             quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Ribbon for family tree',            quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Cigars',                            quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Matches',                           quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '20 lightup batons',                 quantity: '20',   status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Cake topper',                       quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Ring box',                          quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Lightup tree decorations',          quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '3 arches',                          quantity: '3',    status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '10 lightup balloons',               quantity: '10',   status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '20x10 curtain lights',              quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '100 pink cheesecloth napkins',      quantity: '100',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: '100 fake flowers',                  quantity: '100',  status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Flowergirl basket',                 quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Ring bearer pillow',                quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Party favors',                      quantity: '200',  status: 'needed',   responsible_party: '',        notes: 'Tote bags? 200 for $270' },
+  { name: 'Camp mugs for Friday',              quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+  { name: 'Things inside camp mug',            quantity: '',     status: 'needed',   responsible_party: '',        notes: '' },
+]
+
+export async function POST() {
+  const session = await getSession()
+  if (!session.user || session.user.role !== 'admin') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Clear existing
+  const { error: delErr } = await supabase.from('inventory').delete().gte('id', 0)
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+
+  // Insert in batches
+  const rows = ITEMS.map((item, i) => ({ ...item, sort_order: i + 1, created_by: 'import' }))
+  const batchSize = 50
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const { error } = await supabase.from('inventory').insert(rows.slice(i, i + batchSize))
+    if (error) return NextResponse.json({ error: error.message, at: i }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, inserted: rows.length })
+}

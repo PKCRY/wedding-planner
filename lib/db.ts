@@ -40,6 +40,18 @@ export interface Event {
   created_at: string
 }
 
+export interface InventoryItem {
+  id: number
+  name: string
+  quantity: string
+  status: 'needed' | 'partial' | 'acquired'
+  responsible_party: string
+  notes: string
+  sort_order: number
+  created_at: string
+  created_by: string
+}
+
 export function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
 }

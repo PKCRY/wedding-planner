@@ -6,6 +6,7 @@ import type { Task, Event, TaskComment } from '@/lib/db'
 import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
 import PushManagerInline from '@/components/PushManagerInline'
+import InventoryList from '@/components/InventoryList'
 
 const STATUS_BAR: Record<string, string> = {
   done:        '#7a9e7e',
@@ -25,7 +26,7 @@ const STATUS_LABEL: Record<string, string> = {
   pending: 'To Do', in_progress: 'In Progress', done: 'Done', blocked: 'Blocked',
 }
 
-type Tab = 'tasks' | 'calendar'
+type Tab = 'tasks' | 'calendar' | 'inventory'
 
 export default function HerDashboardClient({
   user,
@@ -155,16 +156,20 @@ export default function HerDashboardClient({
 
         {/* Tabs */}
         <div className="flex gap-1 rounded-2xl p-1" style={{ backgroundColor: '#e4ede4' }}>
-          {(['tasks', 'calendar'] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
+          {([
+            { key: 'tasks',     label: 'My Tasks' },
+            { key: 'inventory', label: 'Inventory' },
+            { key: 'calendar',  label: 'Calendar' },
+          ] as { key: Tab; label: string }[]).map(({ key, label }) => (
+            <button key={key} onClick={() => setTab(key)}
               className="flex-1 text-sm font-semibold rounded-xl transition-all"
               style={{
-                backgroundColor: tab === t ? '#fff' : 'transparent',
-                color: tab === t ? '#2d4a30' : '#9db89f',
+                backgroundColor: tab === key ? '#fff' : 'transparent',
+                color: tab === key ? '#2d4a30' : '#9db89f',
                 minHeight: 44,
-                boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
               }}>
-              {t === 'tasks' ? 'My Tasks' : 'Calendar'}
+              {label}
             </button>
           ))}
         </div>
@@ -223,12 +228,14 @@ export default function HerDashboardClient({
           </>
         )}
 
+        {tab === 'inventory' && <InventoryList isAdmin={false} />}
+
         {tab === 'calendar' && (
           <Calendar tasks={[]} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
         )}
       </div>
 
-      {/* FAB — Add Task */}
+      {/* FAB — Add Task (tasks tab only) */}
       {tab === 'tasks' && (
         <button
           onClick={() => setShowAdd(true)}
