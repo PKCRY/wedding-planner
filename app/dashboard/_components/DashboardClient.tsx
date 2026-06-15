@@ -745,7 +745,7 @@ function NotifyModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setStatus('Sending...')
     const res = await fetch('/api/push/notify', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, badge_count: 1 }),
     })
     const data = await res.json()
     setStatus(res.ok ? `Sent to ${data.sent} device(s)!` : data.error)
@@ -812,7 +812,7 @@ function NotifyTab() {
     const res = await fetch('/api/push/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: 'siobhan', title: title.trim(), body: body.trim(), url: '/her-dashboard' }),
+      body: JSON.stringify({ to: 'siobhan', title: title.trim(), body: body.trim(), url: '/her-dashboard', badge_count: 1 }),
     })
     const data = await res.json()
     if (res.ok) {
