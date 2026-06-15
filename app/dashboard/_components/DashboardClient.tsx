@@ -191,12 +191,12 @@ export default function DashboardClient({
           {/* Left: tasks (full width on mobile, 2/3 on lg) */}
           <div className="lg:col-span-2 space-y-4">
             {/* Tabs */}
-            <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: '#d8e8d8' }}>
+            <div className="flex gap-1 rounded-xl p-1 overflow-x-auto" style={{ backgroundColor: '#d8e8d8' }}>
               {([
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
-                { key: 'inventory', label: 'Inventory' },
-                { key: 'notify',    label: '💬 Notify' },
+                { key: 'inventory', label: 'Items' },
+                { key: 'notify',    label: 'Notify' },
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
               ] as { key: Tab; label: string; lgHide?: boolean }[]).map(({ key, label, lgHide }) => (
                 <button
