@@ -13,17 +13,21 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   const updates = await req.json()
 
   if (session.user.role !== 'admin') {
-    // Members can only update status, completed_date, and add comments
-    const { status, add_comment } = updates
     const patch: Record<string, unknown> = {}
 
-    if (status) {
-      patch.status = status
-      if (status === 'done') patch.completed_date = new Date().toISOString().slice(0, 10)
+    const memberFields = ['title', 'description', 'due_date',
+      'responsible_party', 'important_contacts', 'blocked_by'] as const
+    for (const f of memberFields) {
+      if (updates[f] !== undefined) patch[f] = f === 'due_date' ? (updates[f] || null) : updates[f]
+    }
+
+    if (updates.status) {
+      patch.status = updates.status
+      if (updates.status === 'done') patch.completed_date = new Date().toISOString().slice(0, 10)
       else patch.completed_date = null
     }
 
-    if (add_comment && typeof add_comment === 'string' && add_comment.trim()) {
+    if (updates.add_comment && typeof updates.add_comment === 'string' && updates.add_comment.trim()) {
       const { data: current } = await supabase
         .from('tasks')
         .select('task_comments')
@@ -36,7 +40,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
       const comment: TaskComment = {
         user: session.user.id,
         name: session.user.name,
-        text: add_comment.trim(),
+        text: updates.add_comment.trim(),
         at: new Date().toISOString(),
       }
       patch.task_comments = [...(current.task_comments ?? []), comment]

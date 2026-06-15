@@ -85,6 +85,19 @@ export default function HerDashboardClient({
     }
   }
 
+  async function editTask(taskId: number, updates: Partial<Task>) {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    })
+    if (res.ok) {
+      const updated = await res.json() as Task
+      setTasks(prev => prev.map(t => t.id === taskId ? updated : t))
+      if (detailTask?.id === taskId) setDetailTask(updated)
+    }
+  }
+
   async function addEvent(date: string, title: string, description: string) {
     const res = await fetch('/api/events', {
       method: 'POST',
@@ -191,6 +204,7 @@ export default function HerDashboardClient({
           onClose={() => setDetailTask(null)}
           onMarkDone={() => setStatus(detailTask, 'done')}
           onAddComment={text => addComment(detailTask.id, text)}
+          onEdit={updates => editTask(detailTask.id, updates)}
         />
       )}
 
@@ -287,23 +301,64 @@ function HerTaskCard({ task, onDetail }: {
   )
 }
 
-function TaskDetailModal({ task, onClose, onMarkDone, onAddComment }: {
+function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
   task: Task
   onClose: () => void
   onMarkDone: () => void
   onAddComment: (text: string) => Promise<void>
+  onEdit: (updates: Partial<Task>) => Promise<void>
 }) {
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDone, setConfirmDone] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editFields, setEditFields] = useState({
+    title: '',
+    description: '',
+    status: 'pending' as Task['status'],
+    due_date: '',
+    responsible_party: '',
+    important_contacts: '',
+    blocked_by: '',
+  })
   const isDone = task.status === 'done'
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
+  const editSt = STATUS_STYLE[editFields.status] ?? STATUS_STYLE.pending
+
+  function startEditing() {
+    setEditFields({
+      title: task.title ?? '',
+      description: task.description ?? '',
+      status: task.status,
+      due_date: task.due_date ?? '',
+      responsible_party: task.responsible_party ?? '',
+      important_contacts: task.important_contacts ?? '',
+      blocked_by: task.blocked_by ?? '',
+    })
+    setEditing(true)
+  }
 
   async function submitComment() {
     if (!commentText.trim()) return
     setSaving(true)
     await onAddComment(commentText.trim())
     setCommentText('')
+    setSaving(false)
+  }
+
+  async function saveEdit() {
+    if (!editFields.title.trim()) return
+    setSaving(true)
+    await onEdit({
+      title: editFields.title,
+      description: editFields.description,
+      status: editFields.status,
+      due_date: editFields.due_date || null,
+      responsible_party: editFields.responsible_party,
+      important_contacts: editFields.important_contacts,
+      blocked_by: editFields.blocked_by,
+    })
+    setEditing(false)
     setSaving(false)
   }
 
@@ -320,140 +375,240 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment }: {
           <div className="w-10 h-1 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
         </div>
 
-        {/* Status + close */}
+        {/* Status + edit/close buttons */}
         <div className="flex items-center justify-between px-5 pb-4 shrink-0">
-          <span className="text-xs font-semibold px-3 py-1 rounded-full"
-            style={{ backgroundColor: st.bg, color: st.color }}>
-            {STATUS_LABEL[task.status]}
-          </span>
-          <button onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
-            style={{ backgroundColor: '#f5f7f5', color: '#9db89f' }}>×</button>
+          {editing ? (
+            <select
+              value={editFields.status}
+              onChange={e => setEditFields(f => ({ ...f, status: e.target.value as Task['status'] }))}
+              className="text-xs font-semibold px-3 py-1 rounded-full border-0 focus:outline-none appearance-none"
+              style={{ backgroundColor: editSt.bg, color: editSt.color }}
+            >
+              <option value="pending">To Do</option>
+              <option value="in_progress">In Progress</option>
+              <option value="done">Done</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          ) : (
+            <span className="text-xs font-semibold px-3 py-1 rounded-full"
+              style={{ backgroundColor: st.bg, color: st.color }}>
+              {STATUS_LABEL[task.status]}
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            {!editing && (
+              <button onClick={startEditing}
+                className="w-9 h-9 flex items-center justify-center rounded-full text-base"
+                style={{ backgroundColor: '#f5f7f5', color: '#5a7d5e' }}>
+                ✎
+              </button>
+            )}
+            <button onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
+              style={{ backgroundColor: '#f5f7f5', color: '#9db89f' }}>×</button>
+          </div>
         </div>
 
         {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 px-5 space-y-5 pb-6">
-
-          {/* Title */}
-          <h2 className={`text-xl font-bold leading-snug ${isDone ? 'line-through' : ''}`}
-            style={{ color: isDone ? '#b8d0ba' : '#2d4a30' }}>
-            {task.title}
-          </h2>
-
-          {task.description && (
-            <p className="text-base leading-relaxed" style={{ color: '#5a7d5e' }}>{task.description}</p>
-          )}
-
-          {/* Meta chips */}
-          {(task.due_date || task.completed_date || task.responsible_party || task.important_contacts) && (
-            <div className="grid grid-cols-2 gap-2.5">
-              {task.due_date && (
-                <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Due date</p>
-                  <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>
-                    {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                  </p>
+        <div className="overflow-y-auto flex-1 px-5 pb-6">
+          {editing ? (
+            <div className="space-y-4">
+              <input
+                value={editFields.title}
+                onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
+                placeholder="Task title"
+                className="w-full rounded-2xl px-4 py-3 text-lg font-bold focus:outline-none"
+                style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+              />
+              <textarea
+                value={editFields.description}
+                onChange={e => setEditFields(f => ({ ...f, description: e.target.value }))}
+                placeholder="Description (optional)"
+                rows={3}
+                className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none resize-none"
+                style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+              />
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Due date</p>
+                  <input
+                    type="date"
+                    value={editFields.due_date}
+                    onChange={e => setEditFields(f => ({ ...f, due_date: e.target.value }))}
+                    className="w-full rounded-2xl px-3 py-2.5 text-sm focus:outline-none"
+                    style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Responsible</p>
+                  <input
+                    value={editFields.responsible_party}
+                    onChange={e => setEditFields(f => ({ ...f, responsible_party: e.target.value }))}
+                    placeholder="Who's responsible?"
+                    className="w-full rounded-2xl px-3 py-2.5 text-sm focus:outline-none"
+                    style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Important contacts</p>
+                <input
+                  value={editFields.important_contacts}
+                  onChange={e => setEditFields(f => ({ ...f, important_contacts: e.target.value }))}
+                  placeholder="Contact info..."
+                  className="w-full rounded-2xl px-3 py-2.5 text-sm focus:outline-none"
+                  style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+                />
+              </div>
+              {editFields.status === 'blocked' && (
+                <div>
+                  <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Blocked by</p>
+                  <input
+                    value={editFields.blocked_by}
+                    onChange={e => setEditFields(f => ({ ...f, blocked_by: e.target.value }))}
+                    placeholder="What's blocking this?"
+                    className="w-full rounded-2xl px-3 py-2.5 text-sm focus:outline-none"
+                    style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+                  />
                 </div>
               )}
-              {task.completed_date && (
-                <div className="rounded-2xl p-4" style={{ backgroundColor: '#e8f4e8' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Completed</p>
-                  <p className="text-sm font-semibold" style={{ color: '#2d6a30' }}>
-                    {new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                  </p>
-                </div>
-              )}
-              {task.responsible_party && (
-                <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Responsible</p>
-                  <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{task.responsible_party}</p>
-                </div>
-              )}
-              {task.important_contacts && (
-                <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Contacts</p>
-                  <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{task.important_contacts}</p>
-                </div>
-              )}
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setEditing(false)}
+                  className="flex-1 font-semibold rounded-2xl text-sm"
+                  style={{ backgroundColor: '#f5f7f5', color: '#9db89f', minHeight: 52, border: '1px solid #e4ede4' }}>
+                  Cancel
+                </button>
+                <button onClick={saveEdit} disabled={saving || !editFields.title.trim()}
+                  className="flex-1 font-semibold rounded-2xl text-sm text-white"
+                  style={{ backgroundColor: '#7a9e7e', opacity: saving || !editFields.title.trim() ? 0.5 : 1, minHeight: 52 }}>
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
             </div>
-          )}
+          ) : (
+            <div className="space-y-5">
+              {/* Title */}
+              <h2 className={`text-xl font-bold leading-snug ${isDone ? 'line-through' : ''}`}
+                style={{ color: isDone ? '#b8d0ba' : '#2d4a30' }}>
+                {task.title}
+              </h2>
 
-          {task.status === 'blocked' && task.blocked_by && (
-            <div className="rounded-2xl p-4" style={{ backgroundColor: '#fce8ef' }}>
-              <p className="text-xs font-medium mb-1" style={{ color: '#c0607a' }}>Blocked by</p>
-              <p className="text-sm font-semibold" style={{ color: '#c0607a' }}>{task.blocked_by}</p>
-            </div>
-          )}
+              {task.description && (
+                <p className="text-base leading-relaxed" style={{ color: '#5a7d5e' }}>{task.description}</p>
+              )}
 
-          {/* Mark done — two-step confirm */}
-          {!isDone && (
-            confirmDone ? (
-              <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: '#fce8ef', border: '1px solid #f0b8c8' }}>
-                <p className="text-base font-semibold text-center" style={{ color: '#2d4a30' }}>
-                  Are you sure this is complete?
-                </p>
-                <div className="flex gap-3">
-                  <button onClick={() => setConfirmDone(false)}
-                    className="flex-1 font-semibold rounded-2xl text-sm"
-                    style={{ backgroundColor: '#fff', color: '#9db89f', minHeight: 52, border: '1px solid #e4ede4' }}>
-                    Not yet
+              {/* Meta chips */}
+              {(task.due_date || task.completed_date || task.responsible_party || task.important_contacts) && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {task.due_date && (
+                    <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Due date</p>
+                      <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>
+                        {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                  )}
+                  {task.completed_date && (
+                    <div className="rounded-2xl p-4" style={{ backgroundColor: '#e8f4e8' }}>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Completed</p>
+                      <p className="text-sm font-semibold" style={{ color: '#2d6a30' }}>
+                        {new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                  )}
+                  {task.responsible_party && (
+                    <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Responsible</p>
+                      <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{task.responsible_party}</p>
+                    </div>
+                  )}
+                  {task.important_contacts && (
+                    <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Contacts</p>
+                      <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{task.important_contacts}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {task.status === 'blocked' && task.blocked_by && (
+                <div className="rounded-2xl p-4" style={{ backgroundColor: '#fce8ef' }}>
+                  <p className="text-xs font-medium mb-1" style={{ color: '#c0607a' }}>Blocked by</p>
+                  <p className="text-sm font-semibold" style={{ color: '#c0607a' }}>{task.blocked_by}</p>
+                </div>
+              )}
+
+              {/* Mark done — two-step confirm */}
+              {!isDone && (
+                confirmDone ? (
+                  <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: '#fce8ef', border: '1px solid #f0b8c8' }}>
+                    <p className="text-base font-semibold text-center" style={{ color: '#2d4a30' }}>
+                      Are you sure this is complete?
+                    </p>
+                    <div className="flex gap-3">
+                      <button onClick={() => setConfirmDone(false)}
+                        className="flex-1 font-semibold rounded-2xl text-sm"
+                        style={{ backgroundColor: '#fff', color: '#9db89f', minHeight: 52, border: '1px solid #e4ede4' }}>
+                        Not yet
+                      </button>
+                      <button onClick={() => { onMarkDone(); onClose() }}
+                        className="flex-1 font-semibold rounded-2xl text-sm text-white"
+                        style={{ backgroundColor: '#7a9e7e', minHeight: 52 }}>
+                        Yes, done! ✓
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDone(true)}
+                    className="w-full font-semibold rounded-2xl text-white"
+                    style={{ backgroundColor: '#d4849a', minHeight: 56 }}>
+                    Mark as Done
                   </button>
-                  <button onClick={() => { onMarkDone(); onClose() }}
-                    className="flex-1 font-semibold rounded-2xl text-sm text-white"
-                    style={{ backgroundColor: '#7a9e7e', minHeight: 52 }}>
-                    Yes, done! ✓
+                )
+              )}
+
+              {/* Comments */}
+              <div style={{ borderTop: '1px solid #e4ede4' }} className="pt-5 space-y-3">
+                <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>
+                  Notes {(task.task_comments?.length ?? 0) > 0 && `· ${task.task_comments.length}`}
+                </p>
+
+                {(task.task_comments ?? []).length === 0 && (
+                  <p className="text-sm" style={{ color: '#b8d0ba' }}>No notes yet.</p>
+                )}
+
+                <div className="space-y-2">
+                  {(task.task_comments ?? []).map((c: TaskComment, i: number) => (
+                    <div key={i} className="rounded-2xl px-4 py-3" style={{ backgroundColor: '#f5f7f5' }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold" style={{ color: '#5a7d5e' }}>{c.name}</span>
+                        <span className="text-xs" style={{ color: '#b8d0ba' }}>
+                          {new Date(c.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                      <p className="text-sm leading-relaxed" style={{ color: '#2d4a30' }}>{c.text}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <input
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && submitComment()}
+                    placeholder="Add a note..."
+                    className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
+                    style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+                  />
+                  <button onClick={submitComment} disabled={!commentText.trim() || saving}
+                    className="px-5 text-white rounded-2xl font-semibold text-sm"
+                    style={{ backgroundColor: '#7a9e7e', opacity: !commentText.trim() || saving ? 0.4 : 1, minHeight: 52 }}>
+                    Add
                   </button>
                 </div>
               </div>
-            ) : (
-              <button onClick={() => setConfirmDone(true)}
-                className="w-full font-semibold rounded-2xl text-white"
-                style={{ backgroundColor: '#d4849a', minHeight: 56 }}>
-                Mark as Done
-              </button>
-            )
+            </div>
           )}
-
-          {/* Comments */}
-          <div style={{ borderTop: '1px solid #e4ede4' }} className="pt-5 space-y-3">
-            <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>
-              Notes {(task.task_comments?.length ?? 0) > 0 && `· ${task.task_comments.length}`}
-            </p>
-
-            {(task.task_comments ?? []).length === 0 && (
-              <p className="text-sm" style={{ color: '#b8d0ba' }}>No notes yet.</p>
-            )}
-
-            <div className="space-y-2">
-              {(task.task_comments ?? []).map((c: TaskComment, i: number) => (
-                <div key={i} className="rounded-2xl px-4 py-3" style={{ backgroundColor: '#f5f7f5' }}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold" style={{ color: '#5a7d5e' }}>{c.name}</span>
-                    <span className="text-xs" style={{ color: '#b8d0ba' }}>
-                      {new Date(c.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                  </div>
-                  <p className="text-sm leading-relaxed" style={{ color: '#2d4a30' }}>{c.text}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <input
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && submitComment()}
-                placeholder="Add a note..."
-                className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
-                style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
-              />
-              <button onClick={submitComment} disabled={!commentText.trim() || saving}
-                className="px-5 text-white rounded-2xl font-semibold text-sm"
-                style={{ backgroundColor: '#7a9e7e', opacity: !commentText.trim() || saving ? 0.4 : 1, minHeight: 52 }}>
-                Add
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
