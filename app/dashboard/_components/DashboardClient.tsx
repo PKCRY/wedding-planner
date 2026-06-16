@@ -114,13 +114,18 @@ export default function DashboardClient({
     setSelectedIds(new Set())
   }
 
-  function bulkMarkDone() {
+  function bulkSetStatus(status: string) {
     const ids = [...selectedIds]
     if (!ids.length) return
-    askConfirm(`Mark ${ids.length} task${ids.length !== 1 ? 's' : ''} as done?`, () => {
-      ids.forEach(id => patchTask(id, { status: 'done' }))
+    const apply = () => {
+      ids.forEach(id => patchTask(id, { status }))
       exitSelectMode()
-    })
+    }
+    if (status === 'done') {
+      askConfirm(`Mark ${ids.length} task${ids.length !== 1 ? 's' : ''} as done?`, apply)
+    } else {
+      apply()
+    }
   }
 
 
@@ -442,17 +447,18 @@ export default function DashboardClient({
 
       {/* Bulk action bar — shown while selecting tasks */}
       {selectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 bg-white p-4 modal-bottom flex items-center gap-3"
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-white p-4 modal-bottom"
           style={{ borderTop: '1px solid #d8e8d8', boxShadow: '0 -4px 12px rgba(0,0,0,0.06)' }}>
-          <p className="text-sm font-medium flex-1" style={{ color: '#2d4a30' }}>{selectedIds.size} selected</p>
-          <button onClick={exitSelectMode}
-            className="text-sm font-medium rounded-xl px-4" style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e', minHeight: 44 }}>
-            Cancel
-          </button>
-          <button onClick={bulkMarkDone}
-            className="text-sm font-medium rounded-xl px-4 text-white" style={{ backgroundColor: '#7a9e7e', minHeight: 44 }}>
-            Mark Done
-          </button>
+          <p className="text-sm font-medium mb-2" style={{ color: '#2d4a30' }}>{selectedIds.size} selected — set status</p>
+          <div className="grid grid-cols-4 gap-2">
+            {(['pending', 'in_progress', 'done', 'blocked'] as const).map(status => (
+              <button key={status} onClick={() => bulkSetStatus(status)}
+                className="text-xs font-medium rounded-xl px-1"
+                style={{ backgroundColor: STATUS_STYLE[status].bg, color: STATUS_STYLE[status].color, minHeight: 44 }}>
+                {STATUS_LABEL[status]}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
