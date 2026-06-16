@@ -23,6 +23,7 @@ import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
 import PushManagerInline from '@/components/PushManagerInline'
 import InventoryList from '@/components/InventoryList'
+import NotificationCenter from '@/components/NotificationCenter'
 
 const STATUS_BAR: Record<string, string> = {
   done:        '#7a9e7e',  // green
@@ -198,6 +199,7 @@ export default function DashboardClient({
             <div className="text-xs sm:text-sm" style={{ color: '#9db89f' }}>Hey {user.name}!</div>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationCenter />
             <button
               onClick={() => setShowNotify(true)}
               className="text-sm px-4 rounded-xl font-medium hidden sm:block"

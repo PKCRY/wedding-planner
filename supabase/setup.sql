@@ -38,11 +38,23 @@ CREATE TABLE IF NOT EXISTS events (
   created_at  timestamptz  NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS notifications (
+  id          bigserial    PRIMARY KEY,
+  user_id     text         NOT NULL,
+  title       text         NOT NULL,
+  body        text         NOT NULL,
+  url         text         NOT NULL DEFAULT '/',
+  read        boolean      NOT NULL DEFAULT false,
+  created_at  timestamptz  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id, created_at DESC);
+
 -- ── Disable RLS (auth handled by iron-session) ─────────────────────────────
 
 ALTER TABLE tasks              DISABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE events             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications      DISABLE ROW LEVEL SECURITY;
 
 -- ── Add any missing columns if upgrading an existing DB ───────────────────
 

@@ -7,6 +7,7 @@ import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
 import PushManagerInline from '@/components/PushManagerInline'
 import InventoryList from '@/components/InventoryList'
+import NotificationCenter from '@/components/NotificationCenter'
 
 const STATUS_BAR: Record<string, string> = {
   done:        '#7a9e7e',
@@ -142,13 +143,16 @@ export default function HerDashboardClient({
               Hi {user.name}!
             </p>
           </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="w-11 h-11 rounded-full flex items-center justify-center text-white font-semibold text-base shrink-0 shadow-sm active:scale-95 transition-transform"
-            style={{ backgroundColor: '#d4849a' }}
-          >
-            {user.name.charAt(0).toUpperCase()}
-          </button>
+          <div className="flex items-center gap-2">
+            <NotificationCenter />
+            <button
+              onClick={() => setShowSettings(true)}
+              className="w-11 h-11 rounded-full flex items-center justify-center text-white font-semibold text-base shrink-0 shadow-sm active:scale-95 transition-transform"
+              style={{ backgroundColor: '#d4849a' }}
+            >
+              {user.name.charAt(0).toUpperCase()}
+            </button>
+          </div>
         </div>
       </header>
 

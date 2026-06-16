@@ -27,3 +27,16 @@ CREATE TABLE IF NOT EXISTS events (
   created_at  timestamptz  NOT NULL DEFAULT now()
 );
 ALTER TABLE events DISABLE ROW LEVEL SECURITY;
+
+-- In-app notification center
+CREATE TABLE IF NOT EXISTS notifications (
+  id          bigserial    PRIMARY KEY,
+  user_id     text         NOT NULL,
+  title       text         NOT NULL,
+  body        text         NOT NULL,
+  url         text         NOT NULL DEFAULT '/',
+  read        boolean      NOT NULL DEFAULT false,
+  created_at  timestamptz  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id, created_at DESC);
+ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;

@@ -62,6 +62,8 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
+const ALL_USERS = ['nick', 'siobhan']
+
 export async function sendPushToAll(
   payload: { title: string; body: string; url?: string; badge_count?: number },
   excludeUserId?: string
@@ -74,6 +76,29 @@ export async function sendPushToAll(
     const json = JSON.stringify({ url: '/', badge_count: 1, ...payload })
     await Promise.allSettled(
       subs.map(({ subscription }) => webpush.sendNotification(subscription, json))
+    )
+  } catch {
+    // best-effort, never block the calling request
+  }
+}
+
+// Sends a push notification AND saves it to the in-app notification center
+// for every user except excludeUserId (the actor who triggered the event).
+export async function notifyOthers(
+  payload: { title: string; body: string; url?: string; badge_count?: number },
+  excludeUserId?: string
+) {
+  sendPushToAll(payload, excludeUserId)
+  try {
+    const recipients = ALL_USERS.filter(u => u !== excludeUserId)
+    if (!recipients.length) return
+    await supabase.from('notifications').insert(
+      recipients.map(user_id => ({
+        user_id,
+        title: payload.title,
+        body: payload.body,
+        url: payload.url ?? '/',
+      }))
     )
   } catch {
     // best-effort, never block the calling request
