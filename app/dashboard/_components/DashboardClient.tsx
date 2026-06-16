@@ -266,7 +266,7 @@ export default function DashboardClient({
                 ) : canDragReorder ? (
                   <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={displayed.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-2 pb-24 lg:pb-8">
+                      <div className="drag-list space-y-2 pb-24 lg:pb-8">
                         {displayed.map((task, i) => (
                           <SortableTaskCard
                             key={task.id}
