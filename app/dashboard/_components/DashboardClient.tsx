@@ -2,6 +2,22 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { Task, Event, TaskComment } from '@/lib/db'
 import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
@@ -30,6 +46,13 @@ const ASSIGN_LABEL: Record<string, string> = {
   nick: 'Nick', siobhan: 'Siobhan', both: 'Both',
   taylor: 'Taylor', dad: 'Dad', mom: 'Mom',
 }
+
+const PRIORITY_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+  high:   { bg: '#fce8ef', color: '#c0607a', label: 'High' },
+  medium: { bg: '#fef9e7', color: '#a07800', label: 'Medium' },
+  low:    { bg: '#e8f4e8', color: '#2d6a30', label: 'Low' },
+}
+const PRIORITY_NEXT: Record<string, string> = { low: 'medium', medium: 'high', high: 'low' }
 
 type Filter = 'all' | 'nick' | 'siobhan' | 'both' | 'taylor' | 'dad'
 type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify'
@@ -90,24 +113,6 @@ export default function DashboardClient({
     }
   }
 
-  async function reorderTask(task: Task, dir: 'up' | 'down') {
-    const sorted = [...tasks].sort((a, b) => a.sort_order - b.sort_order)
-    const idx = sorted.findIndex(t => t.id === task.id)
-    const swapIdx = dir === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= sorted.length) return
-    const other = sorted[swapIdx]
-    const [aOrder, bOrder] = [task.sort_order, other.sort_order]
-    setTasks(prev => prev.map(t =>
-      t.id === task.id ? { ...t, sort_order: bOrder }
-      : t.id === other.id ? { ...t, sort_order: aOrder }
-      : t
-    ))
-    await Promise.all([
-      fetch(`/api/tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: bOrder }) }),
-      fetch(`/api/tasks/${other.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: aOrder }) }),
-    ])
-  }
-
   async function addEvent(date: string, title: string, description: string) {
     const res = await fetch('/api/events', {
       method: 'POST',
@@ -140,6 +145,32 @@ export default function DashboardClient({
   }
 
   const sortedAll = [...tasks].sort((a, b) => a.sort_order - b.sort_order)
+
+  const canDragReorder = tab === 'tasks' && filter === 'all'
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } }),
+  )
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = displayed.findIndex(t => t.id === active.id)
+    const newIndex = displayed.findIndex(t => t.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const reordered = arrayMove(displayed, oldIndex, newIndex)
+    const updated = reordered.map((t, idx) => ({ ...t, sort_order: idx + 1 }))
+    const updatedById = new Map(updated.map(t => [t.id, t.sort_order]))
+    setTasks(prev => prev.map(t => updatedById.has(t.id) ? { ...t, sort_order: updatedById.get(t.id)! } : t))
+
+    fetch('/api/tasks/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated.map(t => ({ id: t.id, sort_order: t.sort_order }))),
+    }).catch(() => {})
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f0f4f0' }}>
@@ -232,6 +263,24 @@ export default function DashboardClient({
 
                 {displayed.length === 0 ? (
                   <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks here yet</div>
+                ) : canDragReorder ? (
+                  <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={displayed.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-2 pb-24 lg:pb-8">
+                        {displayed.map((task, i) => (
+                          <SortableTaskCard
+                            key={task.id}
+                            task={task}
+                            pos={i + 1}
+                            onDetail={() => setDetailTask(task)}
+                            onEdit={() => setEditTask(task)}
+                            onDelete={() => deleteTask(task.id)}
+                            onPatch={u => patchTask(task.id, u)}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
                 ) : (
                   <div className="space-y-2 pb-24 lg:pb-8">
                     {displayed.map((task, i) => (
@@ -366,10 +415,27 @@ export default function DashboardClient({
   )
 }
 
-function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch }: {
+function SortableTaskCard(props: {
   task: Task; pos: number
   onDetail: () => void; onEdit: () => void
   onDelete: () => void; onPatch: (u: Record<string, unknown>) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.task.id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+    >
+      <TaskCard {...props} dragHandle={{ ...attributes, ...listeners }} />
+    </div>
+  )
+}
+
+function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }: {
+  task: Task; pos: number
+  onDetail: () => void; onEdit: () => void
+  onDelete: () => void; onPatch: (u: Record<string, unknown>) => void
+  dragHandle?: Record<string, unknown>
 }) {
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
   const isDone = task.status === 'done'
@@ -389,6 +455,11 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch }: {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+            {dragHandle && (
+              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}>
+                #{pos}
+              </span>
+            )}
             <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: st.bg, color: st.color }}>
               {STATUS_LABEL[task.status]}
             </span>
@@ -409,6 +480,33 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch }: {
             className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); onDelete() }}
             className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#fdecea', color: '#c0607a' }}>Del</button>
+          {dragHandle && (
+            <button
+              {...dragHandle}
+              onClick={e => e.stopPropagation()}
+              onContextMenu={e => e.preventDefault()}
+              onTouchStart={e => e.preventDefault()}
+              className="touch-none rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
+              style={{
+                color: '#b8d0ba',
+                WebkitTouchCallout: 'none',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'none',
+                minWidth: 28,
+                minHeight: 44,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="7" cy="5" r="2" fill="currentColor"/>
+                <circle cx="13" cy="5" r="2" fill="currentColor"/>
+                <circle cx="7" cy="10" r="2" fill="currentColor"/>
+                <circle cx="13" cy="10" r="2" fill="currentColor"/>
+                <circle cx="7" cy="15" r="2" fill="currentColor"/>
+                <circle cx="13" cy="15" r="2" fill="currentColor"/>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -475,8 +573,18 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
 
           {/* Meta grid */}
           <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onPatch({ priority: PRIORITY_NEXT[task.priority] })}
+              className="rounded-xl p-3 text-left"
+              style={{ backgroundColor: PRIORITY_STYLE[task.priority]?.bg ?? '#f0f4f0' }}
+            >
+              <p className="text-xs mb-0.5" style={{ color: '#9db89f' }}>Priority (tap to cycle)</p>
+              <p className="text-sm font-medium" style={{ color: PRIORITY_STYLE[task.priority]?.color ?? '#2d4a30' }}>
+                {PRIORITY_STYLE[task.priority]?.label ?? task.priority}
+              </p>
+            </button>
             {[
-              { label: 'Priority', value: task.priority },
               { label: 'Assigned', value: ASSIGN_LABEL[task.assigned_to] },
               task.due_date ? { label: 'Due', value: new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) } : null,
               task.completed_date ? { label: 'Completed', value: new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) } : null,
