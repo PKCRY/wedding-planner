@@ -263,6 +263,7 @@ export default function DashboardClient({
                     onDetail={() => setDetailTask(task)}
                     onEdit={() => setEditTask(task)}
                     onDelete={() => deleteTask(task.id)}
+                    onPatch={(u) => patchTask(task.id, u)}
                   />
                 ))}
               </div>
