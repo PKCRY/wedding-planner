@@ -686,14 +686,14 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between p-5 sticky top-0 bg-white rounded-t-2xl z-10"
+        <div className="flex items-start justify-between p-4 sm:p-5 sticky top-0 bg-white rounded-t-2xl z-10"
           style={{ borderBottom: '1px solid #d8e8d8' }}>
-          <div className="flex flex-wrap gap-1.5 flex-1 pr-3">
+          <div className="flex flex-wrap gap-1.5 flex-1 pr-3 min-w-0">
             <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ backgroundColor: st.bg, color: st.color }}>
               {STATUS_LABEL[task.status]}
             </span>
@@ -702,20 +702,20 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
             </span>
           </div>
           <button onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-xl shrink-0"
+            className="w-9 h-9 flex items-center justify-center rounded-full text-xl shrink-0"
             style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}>×</button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4">
           {/* Title */}
-          <h2 className="text-xl font-semibold leading-snug"
+          <h2 className="text-xl font-semibold leading-snug break-words"
             style={{ color: '#2d4a30' }}>
             {task.title}
           </h2>
 
           {/* Description */}
           {task.description && (
-            <p className="text-sm leading-relaxed" style={{ color: '#5a7d5e' }}>{task.description}</p>
+            <p className="text-sm leading-relaxed break-words" style={{ color: '#5a7d5e' }}>{task.description}</p>
           )}
 
           {/* Meta grid */}
@@ -754,9 +754,9 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               task.responsible_party ? { label: 'Responsible', value: task.responsible_party } : null,
               task.important_contacts ? { label: 'Contacts', value: task.important_contacts } : null,
             ].filter(Boolean).map(item => (
-              <div key={item!.label} className="rounded-xl p-3" style={{ backgroundColor: '#f0f4f0' }}>
+              <div key={item!.label} className="rounded-xl p-3 min-w-0" style={{ backgroundColor: '#f0f4f0' }}>
                 <p className="text-xs mb-0.5" style={{ color: '#9db89f' }}>{item!.label}</p>
-                <p className="text-sm font-medium" style={{ color: '#2d4a30' }}>{item!.value}</p>
+                <p className="text-sm font-medium break-words" style={{ color: '#2d4a30' }}>{item!.value}</p>
               </div>
             ))}
           </div>
@@ -776,19 +776,19 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
                 if (nextStatus === 'done' && !confirm(`Mark "${task.title}" as done?`)) return
                 onPatch({ status: nextStatus })
               }}
-              className="flex-1 text-sm font-medium rounded-xl"
+              className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight"
               style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}>
               {STATUS_NEXT[task.status] === 'done' ? '✓' : '→'} {STATUS_LABEL[STATUS_NEXT[task.status]]}
             </button>
             <button
               onClick={onEdit}
-              className="flex-1 text-sm font-medium rounded-xl text-white"
+              className="flex-1 min-w-0 text-sm font-medium rounded-xl text-white px-1 leading-tight"
               style={{ backgroundColor: '#7a9e7e', minHeight: 44 }}>
               Edit
             </button>
             <button
               onClick={() => { if (confirm('Delete this task?')) { onDelete() } }}
-              className="text-sm font-medium rounded-xl px-4"
+              className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight"
               style={{ backgroundColor: '#fdecea', color: '#c0607a', minHeight: 44 }}>
               Del
             </button>
@@ -804,14 +804,14 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
             )}
             <div className="space-y-2">
               {(task.task_comments ?? []).map((c: TaskComment, i: number) => (
-                <div key={i} className="rounded-xl px-3 py-2.5" style={{ backgroundColor: '#f0f4f0' }}>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-semibold" style={{ color: '#5a7d5e' }}>{c.name}</span>
-                    <span className="text-xs" style={{ color: '#b8d0ba' }}>
+                <div key={i} className="rounded-xl px-3 py-2.5 min-w-0" style={{ backgroundColor: '#f0f4f0' }}>
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className="text-xs font-semibold break-words" style={{ color: '#5a7d5e' }}>{c.name}</span>
+                    <span className="text-xs shrink-0" style={{ color: '#b8d0ba' }}>
                       {new Date(c.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   </div>
-                  <p className="text-sm" style={{ color: '#2d4a30' }}>{c.text}</p>
+                  <p className="text-sm break-words" style={{ color: '#2d4a30' }}>{c.text}</p>
                 </div>
               ))}
             </div>
@@ -819,10 +819,10 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               <input value={commentText} onChange={e => setCommentText(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submitComment()}
                 placeholder="Add a comment..."
-                className="flex-1 rounded-xl px-4 py-3 focus:outline-none"
+                className="flex-1 min-w-0 rounded-xl px-4 py-3 focus:outline-none"
                 style={{ border: '1px solid #b8d0ba', color: '#2d4a30' }} />
               <button onClick={submitComment} disabled={!commentText.trim() || saving}
-                className="px-4 text-white rounded-xl font-medium"
+                className="px-4 text-white rounded-xl font-medium shrink-0"
                 style={{ backgroundColor: '#7a9e7e', opacity: !commentText.trim() || saving ? 0.5 : 1, minHeight: 52 }}>
                 Add
               </button>
