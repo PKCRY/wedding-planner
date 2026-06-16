@@ -3,7 +3,6 @@ import { getSession } from '@/lib/session'
 import { supabase, sortTasks } from '@/lib/db'
 import { webpush } from '@/lib/push'
 
-const MEMBER_VISIBLE = ['siobhan', 'both']
 const TOP_N = 5
 
 export async function GET(req: NextRequest) {
@@ -15,7 +14,12 @@ export async function GET(req: NextRequest) {
     const filter = searchParams.get('filter')
 
     let query = supabase.from('tasks').select('*')
-    if (filter && filter !== 'all') query = query.eq('assigned_to', filter)
+    if (filter && filter !== 'all') {
+      // assigned_to may be a comma-separated multi-assignee list, or the legacy 'both' value
+      query = filter === 'nick' || filter === 'siobhan'
+        ? query.or(`assigned_to.ilike.%${filter}%,assigned_to.eq.both`)
+        : query.ilike('assigned_to', `%${filter}%`)
+    }
 
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -29,7 +33,7 @@ export async function GET(req: NextRequest) {
   const { data: all, error } = await supabase
     .from('tasks')
     .select('*')
-    .in('assigned_to', MEMBER_VISIBLE)
+    .or('assigned_to.ilike.%siobhan%,assigned_to.eq.both')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

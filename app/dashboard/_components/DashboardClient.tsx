@@ -48,6 +48,21 @@ const ASSIGN_LABEL: Record<string, string> = {
   taylor: 'Taylor', dad: 'Dad', mom: 'Mom',
 }
 
+const KNOWN_ASSIGNEES = ['nick', 'siobhan', 'taylor', 'dad', 'mom']
+
+function assignees(value: string): string[] {
+  if (value === 'both') return ['nick', 'siobhan']
+  return value.split(',').map(s => s.trim()).filter(Boolean)
+}
+
+function assigneeLabel(value: string): string {
+  return assignees(value).map(v => ASSIGN_LABEL[v] ?? v).join(' & ') || value
+}
+
+function hasAssignee(value: string, who: string): boolean {
+  return assignees(value).includes(who)
+}
+
 const PRIORITY_STYLE: Record<string, { bg: string; color: string }> = {
   high:   { bg: '#fce8ef', color: '#c0607a' },
   medium: { bg: '#fef9e7', color: '#a07800' },
@@ -136,7 +151,7 @@ export default function DashboardClient({
     setEvents(prev => prev.filter(e => e.id !== id))
   }
 
-  const filtered = filter === 'all' ? tasks : tasks.filter(t => t.assigned_to === filter)
+  const filtered = filter === 'all' ? tasks : tasks.filter(t => hasAssignee(t.assigned_to, filter))
   const reviewTasks = tasks.filter(t => t.created_by === 'siobhan' && t.status !== 'done')
   const searchLower = searchText.trim().toLowerCase()
   const displayed = [...filtered]
@@ -145,7 +160,7 @@ export default function DashboardClient({
       if (!searchLower) return true
       const haystack = [
         t.title, t.description, t.category,
-        ASSIGN_LABEL[t.assigned_to] ?? t.assigned_to,
+        assigneeLabel(t.assigned_to),
         STATUS_LABEL[t.status],
         t.responsible_party, t.important_contacts, t.blocked_by,
       ].filter(Boolean).join(' ').toLowerCase()
@@ -574,7 +589,7 @@ function KanbanBoard({ tasks, onDetail, onPatch, onRequestConfirm }: {
               <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PRIORITY_STYLE[task.priority]?.color ?? '#9db89f' }} />
                 <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
-                  {ASSIGN_LABEL[task.assigned_to] ?? task.assigned_to}
+                  {assigneeLabel(task.assigned_to)}
                 </span>
                 {task.status === 'blocked' && (
                   <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
@@ -758,7 +773,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               {STATUS_LABEL[task.status]}
             </span>
             <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
-              {ASSIGN_LABEL[task.assigned_to] ?? task.assigned_to}
+              {assigneeLabel(task.assigned_to)}
             </span>
           </div>
           <button onClick={onClose}
@@ -808,7 +823,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               />
             </div>
             {[
-              { label: 'Assigned', value: ASSIGN_LABEL[task.assigned_to] ?? task.assigned_to },
+              { label: 'Assigned', value: assigneeLabel(task.assigned_to) },
               task.due_date ? { label: 'Due', value: new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) } : null,
               task.completed_date ? { label: 'Completed', value: new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) } : null,
               task.completed_by ? { label: 'Completed by', value: task.completed_by } : null,
@@ -970,28 +985,42 @@ function TaskModal({ task, onClose, onSave, onAddComment }: {
             placeholder="Description (optional)" rows={2}
             className="w-full rounded-xl px-4 py-3 focus:outline-none resize-none" style={inputStyle} />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm mb-1 block" style={labelStyle}>Assign to</label>
-              <input list="assignee-suggestions" value={form.assigned_to}
-                onChange={e => setForm({ ...form, assigned_to: e.target.value })}
-                placeholder="Anyone — doesn't need an account"
-                className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle} />
-              <datalist id="assignee-suggestions">
-                <option value="both" /><option value="nick" /><option value="siobhan" />
-                <option value="taylor" /><option value="dad" /><option value="mom" />
-              </datalist>
+          <div>
+            <label className="text-sm mb-1.5 block" style={labelStyle}>Assign to</label>
+            <div className="grid grid-cols-2 gap-2">
+              {KNOWN_ASSIGNEES.map(who => {
+                const checked = assignees(form.assigned_to).includes(who)
+                return (
+                  <label key={who}
+                    className="flex items-center gap-2 rounded-xl px-3 cursor-pointer"
+                    style={{ ...inputStyle, minHeight: 44, backgroundColor: checked ? '#e8f0e8' : '#fff' }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={e => {
+                        const current = new Set(assignees(form.assigned_to))
+                        if (e.target.checked) current.add(who); else current.delete(who)
+                        const next = KNOWN_ASSIGNEES.filter(k => current.has(k))
+                        setForm({ ...form, assigned_to: next.join(',') })
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm" style={{ color: '#2d4a30' }}>{ASSIGN_LABEL[who]}</span>
+                  </label>
+                )
+              })}
             </div>
-            <div>
-              <label className="text-sm mb-1 block" style={labelStyle}>Status</label>
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
-                className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle}>
-                <option value="pending">Pending</option>
-                <option value="in_progress">In Progress</option>
-                <option value="done">Done</option>
-                <option value="blocked">Blocked</option>
-              </select>
-            </div>
+          </div>
+
+          <div>
+            <label className="text-sm mb-1 block" style={labelStyle}>Status</label>
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
+              className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle}>
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="done">Done</option>
+              <option value="blocked">Blocked</option>
+            </select>
           </div>
 
           {form.status === 'blocked' && (
