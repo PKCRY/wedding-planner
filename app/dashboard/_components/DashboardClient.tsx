@@ -661,7 +661,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         {/* Header */}
         <div className="flex items-start justify-between p-5 sticky top-0 bg-white rounded-t-2xl z-10"
           style={{ borderBottom: '1px solid #d8e8d8' }}>
