@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { supabase } from '@/lib/db'
 import type { TaskComment } from '@/lib/db'
-import { sendPushToAll, taskDonePayload, taskStartedPayload } from '@/lib/notifications'
+import { sendPushToAll, taskDonePayload, taskStartedPayload, taskMovedPayload, taskCommentPayload } from '@/lib/notifications'
 
 type Context = { params: Promise<{ id: string }> }
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Backlog', in_progress: 'In Progress', done: 'Done', blocked: 'Blocked',
+}
 
 export async function PATCH(req: NextRequest, { params }: Context) {
   const session = await getSession()
@@ -68,9 +72,14 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     if (patch.status === 'done') {
-      sendPushToAll(taskDonePayload(session.user.name, data.title))
+      sendPushToAll(taskDonePayload(session.user.name, data.title), session.user.id)
     } else if (patch.status === 'in_progress') {
-      sendPushToAll(taskStartedPayload(session.user.name, data.title))
+      sendPushToAll(taskStartedPayload(session.user.name, data.title), session.user.id)
+    } else if (typeof patch.status === 'string') {
+      sendPushToAll(taskMovedPayload(session.user.name, data.title, STATUS_LABEL[patch.status as string] ?? patch.status as string), session.user.id)
+    }
+    if (patch.task_comments) {
+      sendPushToAll(taskCommentPayload(session.user.name, data.title, updates.add_comment.trim()), session.user.id)
     }
 
     return NextResponse.json(data)
@@ -125,9 +134,14 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (updates.status === 'done') {
-    sendPushToAll(taskDonePayload(session.user.name, data.title))
+    sendPushToAll(taskDonePayload(session.user.name, data.title), session.user.id)
   } else if (updates.status === 'in_progress') {
-    sendPushToAll(taskStartedPayload(session.user.name, data.title))
+    sendPushToAll(taskStartedPayload(session.user.name, data.title), session.user.id)
+  } else if (typeof updates.status === 'string') {
+    sendPushToAll(taskMovedPayload(session.user.name, data.title, STATUS_LABEL[updates.status] ?? updates.status), session.user.id)
+  }
+  if (patch.task_comments) {
+    sendPushToAll(taskCommentPayload(session.user.name, data.title, updates.add_comment.trim()), session.user.id)
   }
 
   return NextResponse.json(data)

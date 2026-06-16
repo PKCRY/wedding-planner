@@ -41,13 +41,35 @@ const STARTED_BODIES = (name: string, task: string) => {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
+const MOVED_TITLES = [
+  '↩️ Back to the list',
+  '📋 Moved',
+  '🔄 Status update',
+]
+
+const MOVED_BODIES = (name: string, task: string, statusLabel: string) =>
+  `${name} moved "${task}" to ${statusLabel}`
+
+const COMMENT_TITLES = [
+  '💬 New comment',
+  '✏️ Note added',
+]
+
+const COMMENT_BODIES = (name: string, task: string, text: string) =>
+  `${name} on "${task}": ${text}`
+
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-export async function sendPushToAll(payload: { title: string; body: string; url?: string; badge_count?: number }) {
+export async function sendPushToAll(
+  payload: { title: string; body: string; url?: string; badge_count?: number },
+  excludeUserId?: string
+) {
   try {
-    const { data: subs } = await supabase.from('push_subscriptions').select('subscription')
+    let query = supabase.from('push_subscriptions').select('subscription, user_id')
+    if (excludeUserId) query = query.neq('user_id', excludeUserId)
+    const { data: subs } = await query
     if (!subs?.length) return
     const json = JSON.stringify({ url: '/', badge_count: 1, ...payload })
     await Promise.allSettled(
@@ -70,6 +92,22 @@ export function taskStartedPayload(name: string, task: string) {
   return {
     title: pick(STARTED_TITLES),
     body: STARTED_BODIES(name, task),
+    url: '/',
+  }
+}
+
+export function taskMovedPayload(name: string, task: string, statusLabel: string) {
+  return {
+    title: pick(MOVED_TITLES),
+    body: MOVED_BODIES(name, task, statusLabel),
+    url: '/',
+  }
+}
+
+export function taskCommentPayload(name: string, task: string, text: string) {
+  return {
+    title: pick(COMMENT_TITLES),
+    body: COMMENT_BODIES(name, task, text.length > 80 ? text.slice(0, 77) + '…' : text),
     url: '/',
   }
 }
