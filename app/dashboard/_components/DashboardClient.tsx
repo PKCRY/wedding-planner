@@ -47,12 +47,11 @@ const ASSIGN_LABEL: Record<string, string> = {
   taylor: 'Taylor', dad: 'Dad', mom: 'Mom',
 }
 
-const PRIORITY_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  high:   { bg: '#fce8ef', color: '#c0607a', label: 'High' },
-  medium: { bg: '#fef9e7', color: '#a07800', label: 'Medium' },
-  low:    { bg: '#e8f4e8', color: '#2d6a30', label: 'Low' },
+const PRIORITY_STYLE: Record<string, { bg: string; color: string }> = {
+  high:   { bg: '#fce8ef', color: '#c0607a' },
+  medium: { bg: '#fef9e7', color: '#a07800' },
+  low:    { bg: '#e8f4e8', color: '#2d6a30' },
 }
-const PRIORITY_NEXT: Record<string, string> = { low: 'medium', medium: 'high', high: 'low' }
 
 type Filter = 'all' | 'nick' | 'siobhan' | 'both' | 'taylor' | 'dad'
 type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify'
@@ -523,7 +522,17 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
 }) {
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
+  const [positionText, setPositionText] = useState(String(task.sort_order ?? ''))
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
+
+  function commitPosition() {
+    const n = parseInt(positionText, 10)
+    if (!Number.isNaN(n) && n !== task.sort_order) {
+      onPatch({ sort_order: n })
+    } else {
+      setPositionText(String(task.sort_order ?? ''))
+    }
+  }
 
   const STATUS_NEXT: Record<string, string> = {
     pending: 'in_progress', in_progress: 'done', done: 'pending', blocked: 'pending',
@@ -573,17 +582,32 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
 
           {/* Meta grid */}
           <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => onPatch({ priority: PRIORITY_NEXT[task.priority] })}
-              className="rounded-xl p-3 text-left"
-              style={{ backgroundColor: PRIORITY_STYLE[task.priority]?.bg ?? '#f0f4f0' }}
-            >
-              <p className="text-xs mb-0.5" style={{ color: '#9db89f' }}>Priority (tap to cycle)</p>
-              <p className="text-sm font-medium" style={{ color: PRIORITY_STYLE[task.priority]?.color ?? '#2d4a30' }}>
-                {PRIORITY_STYLE[task.priority]?.label ?? task.priority}
-              </p>
-            </button>
+            <div className="rounded-xl p-3" style={{ backgroundColor: PRIORITY_STYLE[task.priority]?.bg ?? '#f0f4f0' }}>
+              <p className="text-xs mb-0.5" style={{ color: '#9db89f' }}>Priority</p>
+              <select
+                value={task.priority}
+                onChange={e => onPatch({ priority: e.target.value })}
+                className="text-sm font-medium bg-transparent focus:outline-none -ml-0.5"
+                style={{ color: PRIORITY_STYLE[task.priority]?.color ?? '#2d4a30' }}
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div className="rounded-xl p-3" style={{ backgroundColor: '#f0f4f0' }}>
+              <p className="text-xs mb-0.5" style={{ color: '#9db89f' }}>Position</p>
+              <input
+                type="number"
+                min={1}
+                value={positionText}
+                onChange={e => setPositionText(e.target.value)}
+                onBlur={commitPosition}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                className="text-sm font-medium bg-transparent focus:outline-none w-full"
+                style={{ color: '#2d4a30' }}
+              />
+            </div>
             {[
               { label: 'Assigned', value: ASSIGN_LABEL[task.assigned_to] },
               task.due_date ? { label: 'Due', value: new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) } : null,
