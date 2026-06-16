@@ -69,6 +69,7 @@ export default function DashboardClient({
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [events, setEvents] = useState<Event[]>(initialEvents)
   const [filter, setFilter] = useState<Filter>('all')
+  const [searchText, setSearchText] = useState('')
   const [tab, setTab] = useState<Tab>('tasks')
   const [showCreate, setShowCreate] = useState(false)
   const [detailTask, setDetailTask] = useState<Task | null>(null)
@@ -131,8 +132,19 @@ export default function DashboardClient({
 
   const filtered = filter === 'all' ? tasks : tasks.filter(t => t.assigned_to === filter)
   const reviewTasks = tasks.filter(t => t.created_by === 'siobhan' && t.status !== 'done')
+  const searchLower = searchText.trim().toLowerCase()
   const displayed = [...filtered]
     .filter(t => tab === 'completed' ? t.status === 'done' : t.status !== 'done')
+    .filter(t => {
+      if (!searchLower) return true
+      const haystack = [
+        t.title, t.description, t.category,
+        ASSIGN_LABEL[t.assigned_to] ?? t.assigned_to,
+        STATUS_LABEL[t.status],
+        t.responsible_party, t.important_contacts, t.blocked_by,
+      ].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(searchLower)
+    })
     .sort((a, b) => a.sort_order - b.sort_order)
 
   const stats = {
@@ -145,7 +157,7 @@ export default function DashboardClient({
 
   const sortedAll = [...tasks].sort((a, b) => a.sort_order - b.sort_order)
 
-  const canDragReorder = tab === 'tasks' && filter === 'all'
+  const canDragReorder = tab === 'tasks' && filter === 'all' && !searchLower
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } }),
@@ -246,18 +258,34 @@ export default function DashboardClient({
             {/* Task list */}
             {(tab === 'tasks' || tab === 'completed') && (
               <div>
-                {/* Filter */}
-                <div className="flex gap-1 rounded-xl p-1 mb-4 overflow-x-auto no-scrollbar" style={{ backgroundColor: '#e8f0e8' }}>
-                  {(['all', 'nick', 'siobhan', 'taylor', 'dad', 'both'] as Filter[]).map(f => (
-                    <button
-                      key={f}
-                      onClick={() => changeFilter(f)}
-                      className="shrink-0 text-sm font-medium rounded-lg transition-colors"
-                      style={{ backgroundColor: filter === f ? '#fff' : 'transparent', color: filter === f ? '#2d4a30' : '#7a9e7e', minHeight: 44, minWidth: 60, padding: '0 10px' }}
-                    >
-                      {f === 'all' ? 'All' : f === user.id ? 'Mine' : ASSIGN_LABEL[f] ?? f}
-                    </button>
-                  ))}
+                {/* Search + quick filter */}
+                <div className="flex gap-2 mb-4">
+                  <div className="relative flex-1">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9db89f' }}>
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <input
+                      value={searchText}
+                      onChange={e => setSearchText(e.target.value)}
+                      placeholder="Search tasks..."
+                      className="w-full rounded-xl pl-9 pr-3 text-sm focus:outline-none"
+                      style={{ backgroundColor: '#e8f0e8', color: '#2d4a30', minHeight: 44 }}
+                    />
+                  </div>
+                  <div className="flex gap-1 rounded-xl p-1 shrink-0" style={{ backgroundColor: '#e8f0e8' }}>
+                    {(['all', user.id, user.id === 'nick' ? 'siobhan' : 'nick'] as Filter[]).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => changeFilter(f)}
+                        className="shrink-0 text-sm font-medium rounded-lg transition-colors"
+                        style={{ backgroundColor: filter === f ? '#fff' : 'transparent', color: filter === f ? '#2d4a30' : '#7a9e7e', minHeight: 44, padding: '0 10px' }}
+                      >
+                        {f === 'all' ? 'All' : f === user.id ? 'Mine' : ASSIGN_LABEL[f] ?? f}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className={tab === 'tasks' ? 'lg:hidden' : ''}>
