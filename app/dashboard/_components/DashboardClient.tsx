@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, type DragEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DndContext,
@@ -54,7 +54,7 @@ const PRIORITY_STYLE: Record<string, { bg: string; color: string }> = {
 }
 
 type Filter = 'all' | 'nick' | 'siobhan' | 'both' | 'taylor' | 'dad'
-type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify'
+type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify' | 'board'
 
 export default function DashboardClient({
   user,
@@ -215,27 +215,28 @@ export default function DashboardClient({
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <div className={`mx-auto px-4 sm:px-6 py-4 sm:py-6 ${tab === 'board' ? 'max-w-7xl' : 'max-w-5xl'}`}>
 
         {/* Two-column layout on lg+ */}
         <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
 
-          {/* Left: tasks (full width on mobile, 2/3 on lg) */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Left: tasks (full width on mobile, 2/3 on lg, full on lg for board) */}
+          <div className={`space-y-4 ${tab === 'board' ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
             {/* Tabs — scrollable so all tabs are always reachable on small screens */}
             <div className="flex gap-1 rounded-xl p-1 overflow-x-auto no-scrollbar" style={{ backgroundColor: '#d8e8d8', WebkitOverflowScrolling: 'touch' }}>
               {([
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
                 { key: 'review',    label: `Review${reviewTasks.length ? ` (${reviewTasks.length})` : ''}` },
+                { key: 'board',     label: 'Board', mobileHide: true },
                 { key: 'inventory', label: 'Items' },
                 ...(user.id === 'nick' ? [{ key: 'notify', label: 'Notify' }] : []),
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
-              ] as { key: Tab; label: string; lgHide?: boolean }[]).map(({ key, label, lgHide }) => (
+              ] as { key: Tab; label: string; lgHide?: boolean; mobileHide?: boolean }[]).map(({ key, label, lgHide, mobileHide }) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`shrink-0 text-sm font-medium rounded-lg transition-colors ${lgHide ? 'lg:hidden' : ''}`}
+                  className={`shrink-0 text-sm font-medium rounded-lg transition-colors ${lgHide ? 'lg:hidden' : ''} ${mobileHide ? 'hidden lg:inline-block' : ''}`}
                   style={{ backgroundColor: tab === key ? '#fff' : 'transparent', color: tab === key ? '#2d4a30' : '#7a9e7e', minHeight: 44, minWidth: 72, padding: '0 12px' }}
                 >
                   {label}
@@ -317,6 +318,11 @@ export default function DashboardClient({
               </div>
             )}
 
+            {/* Board — desktop-only scrum-style view */}
+            {tab === 'board' && (
+              <KanbanBoard tasks={tasks} onDetail={t => setDetailTask(t)} onPatch={patchTask} />
+            )}
+
             {/* Inventory */}
             {tab === 'inventory' && <InventoryList isAdmin={true} />}
 
@@ -331,15 +337,17 @@ export default function DashboardClient({
             )}
           </div>
 
-          {/* Right sidebar: calendar (lg only) */}
-          <div className="hidden lg:block lg:col-span-1 space-y-4">
-            <Calendar tasks={tasks} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
-          </div>
+          {/* Right sidebar: calendar (lg only, hidden on board view) */}
+          {tab !== 'board' && (
+            <div className="hidden lg:block lg:col-span-1 space-y-4">
+              <Calendar tasks={tasks} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
+            </div>
+          )}
         </div>
       </div>
 
       {/* FAB — mobile only (desktop has header button), hidden on inventory/notify tabs */}
-      {tab !== 'inventory' && tab !== 'notify' && <button
+      {tab !== 'inventory' && tab !== 'notify' && tab !== 'board' && <button
         onClick={() => setShowCreate(true)}
         className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom sm:hidden"
         style={{ backgroundColor: '#d4849a' }}
@@ -414,6 +422,103 @@ export default function DashboardClient({
   )
 }
 
+function KanbanBoard({ tasks, onDetail, onPatch }: {
+  tasks: Task[]
+  onDetail: (task: Task) => void
+  onPatch: (id: number, updates: Record<string, unknown>) => void
+}) {
+  const [overCol, setOverCol] = useState<string | null>(null)
+
+  const columns: { key: string; label: string; status: Task['status']; tasks: Task[] }[] = [
+    {
+      key: 'backlog', label: 'Backlog', status: 'pending',
+      tasks: tasks.filter(t => t.status === 'pending' || t.status === 'blocked')
+        .sort((a, b) => a.sort_order - b.sort_order),
+    },
+    {
+      key: 'working', label: 'Working On', status: 'in_progress',
+      tasks: tasks.filter(t => t.status === 'in_progress').sort((a, b) => a.sort_order - b.sort_order),
+    },
+    {
+      key: 'done', label: 'Done', status: 'done',
+      tasks: tasks.filter(t => t.status === 'done')
+        .sort((a, b) => (b.completed_date ?? '').localeCompare(a.completed_date ?? '')),
+    },
+  ]
+
+  function handleDrop(e: DragEvent, col: typeof columns[number]) {
+    e.preventDefault()
+    setOverCol(null)
+    const id = Number(e.dataTransfer.getData('text/plain'))
+    const task = tasks.find(t => t.id === id)
+    if (!task || task.status === col.status) return
+    if (col.status === 'done' && !confirm(`Mark "${task.title}" as done?`)) return
+    onPatch(id, { status: col.status })
+  }
+
+  return (
+    <div className="hidden lg:grid lg:grid-cols-3 gap-4">
+      {columns.map(col => (
+        <div
+          key={col.key}
+          onDragOver={e => { e.preventDefault(); setOverCol(col.key) }}
+          onDragLeave={() => setOverCol(c => c === col.key ? null : c)}
+          onDrop={e => handleDrop(e, col)}
+          className="rounded-xl p-3 space-y-2 min-h-[240px] transition-colors"
+          style={{
+            backgroundColor: overCol === col.key ? '#e0ece0' : '#e8f0e8',
+            border: overCol === col.key ? '2px dashed #7a9e7e' : '2px dashed transparent',
+          }}
+        >
+          <div className="flex items-center justify-between px-1">
+            <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{col.label}</p>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: '#fff', color: '#7a9e7e' }}>
+              {col.tasks.length}
+            </span>
+          </div>
+
+          {col.tasks.length === 0 ? (
+            <p className="text-xs text-center py-8" style={{ color: '#9db89f' }}>Drop a task here</p>
+          ) : col.tasks.map(task => (
+            <div
+              key={task.id}
+              draggable
+              onDragStart={e => e.dataTransfer.setData('text/plain', String(task.id))}
+              className="bg-white rounded-lg p-3 shadow-sm cursor-grab active:cursor-grabbing"
+              style={{ border: '1px solid #d8e8d8' }}
+            >
+              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PRIORITY_STYLE[task.priority]?.color ?? '#9db89f' }} />
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
+                  {ASSIGN_LABEL[task.assigned_to] ?? task.assigned_to}
+                </span>
+                {task.status === 'blocked' && (
+                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
+                    Blocked
+                  </span>
+                )}
+              </div>
+              <p className="text-sm font-medium leading-snug mb-1.5" style={{ color: '#2d4a30' }}>{task.title}</p>
+              {task.due_date && (
+                <p className="text-xs mb-1.5" style={{ color: '#b8d0ba' }}>
+                  Due {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </p>
+              )}
+              <button
+                onClick={() => onDetail(task)}
+                className="text-xs font-medium px-2 py-1.5 rounded-lg w-full"
+                style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}
+              >
+                Details
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SortableTaskCard(props: {
   task: Task; pos: number
   onDetail: () => void; onEdit: () => void
@@ -441,7 +546,11 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }
 
   function cycleStatus() {
     const next: Record<string, string> = { pending: 'in_progress', in_progress: 'done', done: 'pending', blocked: 'pending' }
-    onPatch({ status: next[task.status] })
+    const nextStatus = next[task.status]
+    if (nextStatus === 'done') {
+      if (!confirm(`Mark "${task.title}" as done?`)) return
+    }
+    onPatch({ status: nextStatus })
   }
 
   return (
@@ -474,7 +583,7 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }
         {/* Actions */}
         <div className="pointer-events-auto flex items-center gap-1 shrink-0">
           <button onClick={e => { e.stopPropagation(); cycleStatus() }}
-            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}>↻</button>
+            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: isDone ? '#e8f4e8' : '#f0f4f0', color: '#7a9e7e' }}>{isDone ? '✓' : '↻'}</button>
           <button onClick={e => { e.stopPropagation(); onEdit() }}
             className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); onDelete() }}
@@ -560,7 +669,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               {STATUS_LABEL[task.status]}
             </span>
             <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
-              {ASSIGN_LABEL[task.assigned_to]}
+              {ASSIGN_LABEL[task.assigned_to] ?? task.assigned_to}
             </span>
           </div>
           <button onClick={onClose}
@@ -609,7 +718,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               />
             </div>
             {[
-              { label: 'Assigned', value: ASSIGN_LABEL[task.assigned_to] },
+              { label: 'Assigned', value: ASSIGN_LABEL[task.assigned_to] ?? task.assigned_to },
               task.due_date ? { label: 'Due', value: new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) } : null,
               task.completed_date ? { label: 'Completed', value: new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) } : null,
               task.completed_by ? { label: 'Completed by', value: task.completed_by } : null,
@@ -633,10 +742,14 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
           {/* Actions */}
           <div className="flex gap-2">
             <button
-              onClick={() => onPatch({ status: STATUS_NEXT[task.status] })}
+              onClick={() => {
+                const nextStatus = STATUS_NEXT[task.status]
+                if (nextStatus === 'done' && !confirm(`Mark "${task.title}" as done?`)) return
+                onPatch({ status: nextStatus })
+              }}
               className="flex-1 text-sm font-medium rounded-xl"
               style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}>
-              → {STATUS_LABEL[STATUS_NEXT[task.status]]}
+              {STATUS_NEXT[task.status] === 'done' ? '✓' : '→'} {STATUS_LABEL[STATUS_NEXT[task.status]]}
             </button>
             <button
               onClick={onEdit}
@@ -765,14 +878,14 @@ function TaskModal({ task, onClose, onSave, onAddComment }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm mb-1 block" style={labelStyle}>Assign to</label>
-              <select value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })}
-                className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle}>
-                <option value="both">Both</option>
-                <option value="nick">Nick</option>
-                <option value="siobhan">Siobhan</option>
-                <option value="taylor">Taylor</option>
-                <option value="dad">Dad</option>
-              </select>
+              <input list="assignee-suggestions" value={form.assigned_to}
+                onChange={e => setForm({ ...form, assigned_to: e.target.value })}
+                placeholder="Anyone — doesn't need an account"
+                className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle} />
+              <datalist id="assignee-suggestions">
+                <option value="both" /><option value="nick" /><option value="siobhan" />
+                <option value="taylor" /><option value="dad" /><option value="mom" />
+              </datalist>
             </div>
             <div>
               <label className="text-sm mb-1 block" style={labelStyle}>Status</label>

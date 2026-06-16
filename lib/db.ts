@@ -17,8 +17,9 @@ export interface Task {
   title: string
   description: string
   category: string
-  assigned_to: 'nick' | 'siobhan' | 'both'
+  assigned_to: string
   status: 'pending' | 'in_progress' | 'done' | 'blocked'
+  status_changed_at: string | null
   priority: 'low' | 'medium' | 'high'
   sort_order: number
   due_date: string | null

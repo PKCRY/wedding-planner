@@ -24,6 +24,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
 
     if (updates.status) {
       patch.status = updates.status
+      patch.status_changed_at = new Date().toISOString()
       if (updates.status === 'done') {
         patch.completed_date = new Date().toISOString().slice(0, 10)
         patch.completed_by = session.user.name
@@ -84,6 +85,8 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   for (const f of adminFields) {
     if (updates[f] !== undefined) patch[f] = updates[f]
   }
+
+  if (updates.status) patch.status_changed_at = new Date().toISOString()
 
   // Handle status → auto set/clear completed_date + completed_by
   if (updates.status === 'done' && !patch.completed_date) {

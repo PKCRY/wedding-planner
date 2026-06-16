@@ -13,6 +13,10 @@ ALTER TABLE tasks
 -- Rename fiance → siobhan in existing data
 UPDATE tasks SET assigned_to = 'siobhan' WHERE assigned_to = 'fiance';
 
+-- Track when status last changed, for stale "working on" reminders
+ALTER TABLE tasks
+  ADD COLUMN IF NOT EXISTS status_changed_at timestamptz;
+
 -- Calendar events table
 CREATE TABLE IF NOT EXISTS events (
   id          bigserial    PRIMARY KEY,
