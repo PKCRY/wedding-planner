@@ -728,20 +728,25 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
   }
 
   return (
-    <div className="relative bg-white rounded-xl shadow-sm overflow-hidden" style={{ border: selected ? '1px solid #7a9e7e' : '1px solid #d8e8d8' }}>
+    <div className="relative rounded-xl shadow-sm overflow-hidden"
+      style={{ border: selected ? '1px solid #7a9e7e' : '1px solid #d8e8d8', backgroundColor: selected ? '#e8f0e8' : '#fff' }}>
       <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
       <button type="button" onClick={selectMode ? onToggleSelect : onDetail} className="absolute inset-0 w-full h-full rounded-xl z-0" />
 
-      <div className="relative flex items-center gap-2 pl-3 pr-3 py-3 pointer-events-none">
+      <div className="relative flex items-center gap-1 pl-1 pr-3 py-3 pointer-events-none">
         {selectMode && (
-          <input
-            type="checkbox"
-            checked={!!selected}
-            onChange={onToggleSelect}
+          <label
             onClick={e => e.stopPropagation()}
-            className="pointer-events-auto shrink-0"
-            style={{ width: 22, height: 22, accentColor: '#7a9e7e' }}
-          />
+            className="pointer-events-auto shrink-0 flex items-center justify-center cursor-pointer"
+            style={{ width: 44, height: 44 }}
+          >
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={onToggleSelect}
+              style={{ width: 24, height: 24, accentColor: '#7a9e7e' }}
+            />
+          </label>
         )}
 
         {/* Content */}
