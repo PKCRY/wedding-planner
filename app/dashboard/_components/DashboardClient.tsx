@@ -93,10 +93,34 @@ export default function DashboardClient({
   const [showNotify, setShowNotify] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [, startTransition] = useTransition()
 
   function askConfirm(message: string, onConfirm: () => void) {
     setConfirmState({ message, onConfirm })
+  }
+
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
+  function bulkMarkDone() {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    askConfirm(`Mark ${ids.length} task${ids.length !== 1 ? 's' : ''} as done?`, () => {
+      ids.forEach(id => patchTask(id, { status: 'done' }))
+      exitSelectMode()
+    })
   }
 
 
@@ -178,7 +202,7 @@ export default function DashboardClient({
 
   const sortedAll = [...tasks].sort((a, b) => a.sort_order - b.sort_order)
 
-  const canDragReorder = tab === 'tasks' && filter === 'all' && !searchLower
+  const canDragReorder = tab === 'tasks' && filter === 'all' && !searchLower && !selectMode
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } }),
@@ -310,6 +334,16 @@ export default function DashboardClient({
                   </div>
                 </div>
 
+                {tab === 'tasks' && (
+                  <div className="flex justify-end mb-2">
+                    <button onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+                      className="text-xs font-medium px-3 rounded-lg"
+                      style={{ backgroundColor: selectMode ? '#fdecea' : '#f0f4f0', color: selectMode ? '#c0607a' : '#7a9e7e', minHeight: 36 }}>
+                      {selectMode ? 'Cancel' : 'Select'}
+                    </button>
+                  </div>
+                )}
+
                 <div className={tab === 'tasks' ? 'lg:hidden' : ''}>
                   {displayed.length === 0 ? (
                     <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks here yet</div>
@@ -344,6 +378,9 @@ export default function DashboardClient({
                           onDelete={() => deleteTask(task.id)}
                           onPatch={u => patchTask(task.id, u)}
                           onRequestConfirm={askConfirm}
+                          selectMode={tab === 'tasks' && selectMode}
+                          selected={selectedIds.has(task.id)}
+                          onToggleSelect={() => toggleSelect(task.id)}
                         />
                       ))}
                     </div>
@@ -403,8 +440,24 @@ export default function DashboardClient({
         </div>
       </div>
 
+      {/* Bulk action bar — shown while selecting tasks */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-white p-4 modal-bottom flex items-center gap-3"
+          style={{ borderTop: '1px solid #d8e8d8', boxShadow: '0 -4px 12px rgba(0,0,0,0.06)' }}>
+          <p className="text-sm font-medium flex-1" style={{ color: '#2d4a30' }}>{selectedIds.size} selected</p>
+          <button onClick={exitSelectMode}
+            className="text-sm font-medium rounded-xl px-4" style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e', minHeight: 44 }}>
+            Cancel
+          </button>
+          <button onClick={bulkMarkDone}
+            className="text-sm font-medium rounded-xl px-4 text-white" style={{ backgroundColor: '#7a9e7e', minHeight: 44 }}>
+            Mark Done
+          </button>
+        </div>
+      )}
+
       {/* FAB — mobile only (desktop has header button), hidden on inventory/notify tabs */}
-      {tab !== 'inventory' && tab !== 'notify' && <button
+      {tab !== 'inventory' && tab !== 'notify' && !selectMode && <button
         onClick={() => setShowCreate(true)}
         className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom sm:hidden"
         style={{ backgroundColor: '#d4849a' }}
@@ -628,12 +681,15 @@ function SortableTaskCard(props: {
   )
 }
 
-function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestConfirm, dragHandle }: {
+function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestConfirm, dragHandle, selectMode, selected, onToggleSelect }: {
   task: Task; pos: number
   onDetail: () => void; onEdit: () => void
   onDelete: () => void; onPatch: (u: Record<string, unknown>) => void
   onRequestConfirm: (message: string, onConfirm: () => void) => void
   dragHandle?: Record<string, unknown>
+  selectMode?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
   const isDone = task.status === 'done'
@@ -649,11 +705,21 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
   }
 
   return (
-    <div className="relative bg-white rounded-xl shadow-sm overflow-hidden" style={{ border: '1px solid #d8e8d8' }}>
+    <div className="relative bg-white rounded-xl shadow-sm overflow-hidden" style={{ border: selected ? '1px solid #7a9e7e' : '1px solid #d8e8d8' }}>
       <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ backgroundColor: STATUS_BAR[task.status] ?? '#d8e8d8' }} />
-      <button type="button" onClick={onDetail} className="absolute inset-0 w-full h-full rounded-xl z-0" />
+      <button type="button" onClick={selectMode ? onToggleSelect : onDetail} className="absolute inset-0 w-full h-full rounded-xl z-0" />
 
       <div className="relative flex items-center gap-2 pl-3 pr-3 py-3 pointer-events-none">
+        {selectMode && (
+          <div className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: selected ? '#7a9e7e' : '#f0f4f0', border: selected ? 'none' : '1px solid #d8e8d8' }}>
+            {selected && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            )}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -676,7 +742,7 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
         </div>
 
         {/* Actions */}
-        <div className="pointer-events-auto flex items-center gap-1 shrink-0">
+        {!selectMode && <div className="pointer-events-auto flex items-center gap-1 shrink-0">
           <button onClick={e => { e.stopPropagation(); cycleStatus() }}
             className="text-xs rounded-lg flex items-center justify-center shrink-0" style={{ width: 28, height: 28, backgroundColor: isDone ? '#e8f4e8' : '#f0f4f0', color: '#7a9e7e' }}>{task.status === 'in_progress' ? '✓' : '→'}</button>
           <button onClick={e => { e.stopPropagation(); onEdit() }}
@@ -713,7 +779,7 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
               </svg>
             </button>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   )
