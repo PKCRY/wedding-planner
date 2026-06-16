@@ -269,7 +269,7 @@ export default function DashboardClient({
                     <input
                       value={searchText}
                       onChange={e => setSearchText(e.target.value)}
-                      placeholder="Search tasks..."
+                      placeholder="Search tasks, people, or categories..."
                       className="w-full rounded-xl pl-9 pr-3 text-sm focus:outline-none"
                       style={{ backgroundColor: '#e8f0e8', color: '#2d4a30', minHeight: 44 }}
                     />
