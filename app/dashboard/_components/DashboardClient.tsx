@@ -76,7 +76,12 @@ export default function DashboardClient({
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [showNotify, setShowNotify] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [, startTransition] = useTransition()
+
+  function askConfirm(message: string, onConfirm: () => void) {
+    setConfirmState({ message, onConfirm })
+  }
 
 
   async function logout() {
@@ -304,6 +309,7 @@ export default function DashboardClient({
                               onEdit={() => setEditTask(task)}
                               onDelete={() => deleteTask(task.id)}
                               onPatch={u => patchTask(task.id, u)}
+                              onRequestConfirm={askConfirm}
                             />
                           ))}
                         </div>
@@ -320,6 +326,7 @@ export default function DashboardClient({
                           onEdit={() => setEditTask(task)}
                           onDelete={() => deleteTask(task.id)}
                           onPatch={u => patchTask(task.id, u)}
+                          onRequestConfirm={askConfirm}
                         />
                       ))}
                     </div>
@@ -329,7 +336,7 @@ export default function DashboardClient({
                 {/* Desktop: 3-column kanban replaces the list on the Active tab */}
                 {tab === 'tasks' && (
                   <div className="hidden lg:block">
-                    <KanbanBoard tasks={displayed} onDetail={t => setDetailTask(t)} onPatch={patchTask} />
+                    <KanbanBoard tasks={displayed} onDetail={t => setDetailTask(t)} onPatch={patchTask} onRequestConfirm={askConfirm} />
                   </div>
                 )}
               </div>
@@ -349,6 +356,7 @@ export default function DashboardClient({
                     onEdit={() => setEditTask(task)}
                     onDelete={() => deleteTask(task.id)}
                     onPatch={(u) => patchTask(task.id, u)}
+                    onRequestConfirm={askConfirm}
                   />
                 ))}
               </div>
@@ -425,6 +433,7 @@ export default function DashboardClient({
               setTasks(all)
             }
           }}
+          onRequestConfirm={askConfirm}
         />
       )}
 
@@ -450,14 +459,51 @@ export default function DashboardClient({
 
       {showNotify && <NotifyModal onClose={() => setShowNotify(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onLogout={logout} />}
+      {confirmState && (
+        <ConfirmDialog
+          message={confirmState.message}
+          onCancel={() => setConfirmState(null)}
+          onConfirm={() => { confirmState.onConfirm(); setConfirmState(null) }}
+        />
+      )}
     </div>
   )
 }
 
-function KanbanBoard({ tasks, onDetail, onPatch }: {
+function ConfirmDialog({ message, onCancel, onConfirm }: {
+  message: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+      onClick={e => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+        <p className="text-base font-medium text-center leading-snug" style={{ color: '#2d4a30' }}>{message}</p>
+        <div className="flex gap-2">
+          <button onClick={onCancel}
+            className="flex-1 text-sm font-medium rounded-xl"
+            style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e', minHeight: 44 }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm}
+            className="flex-1 text-sm font-medium rounded-xl text-white"
+            style={{ backgroundColor: '#7a9e7e', minHeight: 44 }}>
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function KanbanBoard({ tasks, onDetail, onPatch, onRequestConfirm }: {
   tasks: Task[]
   onDetail: (task: Task) => void
   onPatch: (id: number, updates: Record<string, unknown>) => void
+  onRequestConfirm: (message: string, onConfirm: () => void) => void
 }) {
   const [overCol, setOverCol] = useState<string | null>(null)
 
@@ -484,7 +530,10 @@ function KanbanBoard({ tasks, onDetail, onPatch }: {
     const id = Number(e.dataTransfer.getData('text/plain'))
     const task = tasks.find(t => t.id === id)
     if (!task || task.status === col.status) return
-    if (col.status === 'done' && !confirm(`Mark "${task.title}" as done?`)) return
+    if (col.status === 'done') {
+      onRequestConfirm(`Mark "${task.title}" as done?`, () => onPatch(id, { status: col.status }))
+      return
+    }
     onPatch(id, { status: col.status })
   }
 
@@ -549,6 +598,7 @@ function SortableTaskCard(props: {
   task: Task; pos: number
   onDetail: () => void; onEdit: () => void
   onDelete: () => void; onPatch: (u: Record<string, unknown>) => void
+  onRequestConfirm: (message: string, onConfirm: () => void) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.task.id })
   return (
@@ -561,10 +611,11 @@ function SortableTaskCard(props: {
   )
 }
 
-function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }: {
+function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestConfirm, dragHandle }: {
   task: Task; pos: number
   onDetail: () => void; onEdit: () => void
   onDelete: () => void; onPatch: (u: Record<string, unknown>) => void
+  onRequestConfirm: (message: string, onConfirm: () => void) => void
   dragHandle?: Record<string, unknown>
 }) {
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
@@ -574,7 +625,8 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }
     const next: Record<string, string> = { pending: 'in_progress', in_progress: 'done', done: 'pending', blocked: 'pending' }
     const nextStatus = next[task.status]
     if (nextStatus === 'done') {
-      if (!confirm(`Mark "${task.title}" as done?`)) return
+      onRequestConfirm(`Mark "${task.title}" as done?`, () => onPatch({ status: nextStatus }))
+      return
     }
     onPatch({ status: nextStatus })
   }
@@ -609,7 +661,7 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }
         {/* Actions */}
         <div className="pointer-events-auto flex items-center gap-1 shrink-0">
           <button onClick={e => { e.stopPropagation(); cycleStatus() }}
-            className="text-xs rounded-lg flex items-center justify-center shrink-0" style={{ width: 28, height: 28, backgroundColor: isDone ? '#e8f4e8' : '#f0f4f0', color: '#7a9e7e' }}>✓</button>
+            className="text-xs rounded-lg flex items-center justify-center shrink-0" style={{ width: 28, height: 28, backgroundColor: isDone ? '#e8f4e8' : '#f0f4f0', color: '#7a9e7e' }}>{task.status === 'in_progress' ? '✓' : '→'}</button>
           <button onClick={e => { e.stopPropagation(); onEdit() }}
             className="rounded-lg flex items-center justify-center shrink-0" style={{ width: 28, height: 28, backgroundColor: '#f0f4f0', color: '#7a9e7e' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -650,13 +702,14 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }
   )
 }
 
-function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddComment }: {
+function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddComment, onRequestConfirm }: {
   task: Task
   onClose: () => void
   onEdit: () => void
   onDelete: () => void
   onPatch: (u: Record<string, unknown>) => void
   onAddComment: (text: string) => Promise<void>
+  onRequestConfirm: (message: string, onConfirm: () => void) => void
 }) {
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
@@ -816,12 +869,15 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
             <button
               onClick={() => {
                 const nextStatus = STATUS_NEXT[task.status]
-                if (nextStatus === 'done' && !confirm(`Mark "${task.title}" as done?`)) return
+                if (nextStatus === 'done') {
+                  onRequestConfirm(`Mark "${task.title}" as done?`, () => onPatch({ status: nextStatus }))
+                  return
+                }
                 onPatch({ status: nextStatus })
               }}
               className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight"
               style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}>
-              {STATUS_NEXT[task.status] === 'done' ? '✓' : '→'} {STATUS_LABEL[STATUS_NEXT[task.status]]}
+              {task.status === 'in_progress' ? '✓' : '→'} {STATUS_LABEL[STATUS_NEXT[task.status]]}
             </button>
             <button
               onClick={onEdit}
