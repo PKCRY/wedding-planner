@@ -488,7 +488,8 @@ function KanbanBoard({ tasks, onDetail, onPatch }: {
               key={task.id}
               draggable
               onDragStart={e => e.dataTransfer.setData('text/plain', String(task.id))}
-              className="bg-white rounded-lg p-3 shadow-sm cursor-grab active:cursor-grabbing"
+              onClick={() => onDetail(task)}
+              className="bg-white rounded-lg p-3 shadow-sm cursor-pointer active:cursor-grabbing"
               style={{ border: '1px solid #d8e8d8' }}
             >
               <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -504,17 +505,10 @@ function KanbanBoard({ tasks, onDetail, onPatch }: {
               </div>
               <p className="text-sm font-medium leading-snug mb-1.5" style={{ color: '#2d4a30' }}>{task.title}</p>
               {task.due_date && (
-                <p className="text-xs mb-1.5" style={{ color: '#b8d0ba' }}>
+                <p className="text-xs" style={{ color: '#b8d0ba' }}>
                   Due {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </p>
               )}
-              <button
-                onClick={() => onDetail(task)}
-                className="text-xs font-medium px-2 py-1.5 rounded-lg w-full"
-                style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}
-              >
-                Details
-              </button>
             </div>
           ))}
         </div>
