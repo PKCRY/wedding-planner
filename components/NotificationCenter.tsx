@@ -20,13 +20,24 @@ function relTime(iso: string) {
   return `${Math.round(hrs / 24)}d ago`
 }
 
+function syncBadge(count: number) {
+  try {
+    if (count > 0 && 'setAppBadge' in navigator) navigator.setAppBadge(count).catch(() => {})
+    else if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {})
+  } catch {}
+}
+
 export default function NotificationCenter() {
   const [items, setItems] = useState<Notif[]>([])
   const [open, setOpen] = useState(false)
 
   async function load() {
     const res = await fetch('/api/notifications')
-    if (res.ok) setItems(await res.json())
+    if (res.ok) {
+      const data: Notif[] = await res.json()
+      setItems(data)
+      syncBadge(data.filter(i => !i.read).length)
+    }
   }
 
   useEffect(() => {
@@ -40,6 +51,7 @@ export default function NotificationCenter() {
     if (items.some(i => !i.read)) {
       fetch('/api/notifications', { method: 'PATCH' }).catch(() => {})
       setItems(prev => prev.map(i => ({ ...i, read: true })))
+      syncBadge(0)
     }
   }
 
@@ -50,6 +62,7 @@ export default function NotificationCenter() {
 
   function clearAll() {
     setItems([])
+    syncBadge(0)
     fetch('/api/notifications', { method: 'DELETE' }).catch(() => {})
   }
 
