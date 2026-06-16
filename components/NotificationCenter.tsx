@@ -55,17 +55,6 @@ export default function NotificationCenter() {
     }
   }
 
-  function dismiss(id: number) {
-    setItems(prev => prev.filter(i => i.id !== id))
-    fetch(`/api/notifications/${id}`, { method: 'DELETE' }).catch(() => {})
-  }
-
-  function clearAll() {
-    setItems([])
-    syncBadge(0)
-    fetch('/api/notifications', { method: 'DELETE' }).catch(() => {})
-  }
-
   const unread = items.filter(i => !i.read).length
 
   return (
@@ -96,33 +85,19 @@ export default function NotificationCenter() {
 
             <div className="flex items-center justify-between p-4 sm:p-5 shrink-0" style={{ borderBottom: '1px solid #d8e8d8' }}>
               <p className="font-semibold text-base" style={{ color: '#2d4a30' }}>Notifications</p>
-              <div className="flex items-center gap-2">
-                {items.length > 0 && (
-                  <button onClick={clearAll}
-                    className="text-xs font-medium px-3 rounded-lg"
-                    style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e', minHeight: 36 }}>
-                    Clear all
-                  </button>
-                )}
-                <button onClick={() => setOpen(false)}
-                  className="w-11 h-11 flex items-center justify-center rounded-full text-xl shrink-0"
-                  style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}>×</button>
-              </div>
+              <button onClick={() => setOpen(false)}
+                className="w-11 h-11 flex items-center justify-center rounded-full text-xl shrink-0"
+                style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}>×</button>
             </div>
 
             <div className="overflow-y-auto overflow-x-hidden flex-1 p-4 sm:p-5 space-y-2">
               {items.length === 0 ? (
                 <p className="text-sm text-center py-12" style={{ color: '#9db89f' }}>No notifications</p>
               ) : items.map(n => (
-                <div key={n.id} className="rounded-xl p-3 flex items-start gap-2 min-w-0" style={{ backgroundColor: '#f0f4f0' }}>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold break-words" style={{ color: '#2d4a30' }}>{n.title}</p>
-                    <p className="text-sm break-words mt-0.5" style={{ color: '#5a7d5e' }}>{n.body}</p>
-                    <p className="text-xs mt-1" style={{ color: '#b8d0ba' }}>{relTime(n.created_at)}</p>
-                  </div>
-                  <button onClick={() => dismiss(n.id)}
-                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-sm"
-                    style={{ backgroundColor: '#fff', color: '#9db89f' }}>×</button>
+                <div key={n.id} className="rounded-xl p-3 min-w-0" style={{ backgroundColor: '#f0f4f0' }}>
+                  <p className="text-sm font-semibold break-words" style={{ color: '#2d4a30' }}>{n.title}</p>
+                  <p className="text-sm break-words mt-0.5" style={{ color: '#5a7d5e' }}>{n.body}</p>
+                  <p className="text-xs mt-1" style={{ color: '#b8d0ba' }}>{relTime(n.created_at)}</p>
                 </div>
               ))}
             </div>

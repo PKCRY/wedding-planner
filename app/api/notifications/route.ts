@@ -30,12 +30,3 @@ export async function PATCH(_req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
-
-export async function DELETE(_req: NextRequest) {
-  const session = await getSession()
-  if (!session.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { error } = await supabase.from('notifications').delete().eq('user_id', session.user.id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
-}
