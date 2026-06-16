@@ -309,6 +309,33 @@ export default function DashboardClient({
             {/* Task list */}
             {(tab === 'tasks' || tab === 'completed') && (
               <div>
+                {/* Select toggle — top-left, email-app style (tap to multi-select) */}
+                {tab === 'tasks' && (
+                  <div className="flex items-center justify-between mb-3">
+                    <button onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+                      className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-2"
+                      style={{ color: selectMode ? '#c0607a' : '#7a9e7e', minHeight: 44 }}>
+                      {selectMode ? (
+                        <>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 6 6 18M6 6l12 12" />
+                          </svg>
+                          Cancel
+                        </>
+                      ) : (
+                        <>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="5" width="6" height="6" rx="1.5" />
+                            <path d="M13 6h8M13 12h8M13 18h8" />
+                            <path d="M4.5 18.5 6 20l3-3" />
+                          </svg>
+                          Select
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
                 {/* Search + quick filter */}
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1">
@@ -338,16 +365,6 @@ export default function DashboardClient({
                     ))}
                   </div>
                 </div>
-
-                {tab === 'tasks' && (
-                  <div className="flex justify-end mb-2">
-                    <button onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-                      className="text-xs font-medium px-3 rounded-lg"
-                      style={{ backgroundColor: selectMode ? '#fdecea' : '#f0f4f0', color: selectMode ? '#c0607a' : '#7a9e7e', minHeight: 36 }}>
-                      {selectMode ? 'Cancel' : 'Select'}
-                    </button>
-                  </div>
-                )}
 
                 <div className={tab === 'tasks' && !selectMode ? 'lg:hidden' : ''}>
                   {displayed.length === 0 ? (
