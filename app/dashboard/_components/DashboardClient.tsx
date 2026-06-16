@@ -686,12 +686,17 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4"
+      className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Drag handle — mobile only, iOS sheet affordance */}
+        <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+          <div className="w-9 h-1.5 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
+        </div>
+
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-5 sticky top-0 bg-white rounded-t-2xl z-10"
+        <div className="flex items-start justify-between p-4 sm:p-5 shrink-0"
           style={{ borderBottom: '1px solid #d8e8d8' }}>
           <div className="flex flex-wrap gap-1.5 flex-1 pr-3 min-w-0">
             <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ backgroundColor: st.bg, color: st.color }}>
@@ -702,11 +707,12 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
             </span>
           </div>
           <button onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-full text-xl shrink-0"
+            className="w-11 h-11 flex items-center justify-center rounded-full text-xl shrink-0"
             style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}>×</button>
         </div>
 
-        <div className="p-4 sm:p-5 space-y-4">
+        {/* Scrollable body */}
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overflow-x-hidden flex-1">
           {/* Title */}
           <h2 className="text-xl font-semibold leading-snug break-words"
             style={{ color: '#2d4a30' }}>
@@ -768,32 +774,6 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                const nextStatus = STATUS_NEXT[task.status]
-                if (nextStatus === 'done' && !confirm(`Mark "${task.title}" as done?`)) return
-                onPatch({ status: nextStatus })
-              }}
-              className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight"
-              style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}>
-              {STATUS_NEXT[task.status] === 'done' ? '✓' : '→'} {STATUS_LABEL[STATUS_NEXT[task.status]]}
-            </button>
-            <button
-              onClick={onEdit}
-              className="flex-1 min-w-0 text-sm font-medium rounded-xl text-white px-1 leading-tight"
-              style={{ backgroundColor: '#7a9e7e', minHeight: 44 }}>
-              Edit
-            </button>
-            <button
-              onClick={() => { if (confirm('Delete this task?')) { onDelete() } }}
-              className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight"
-              style={{ backgroundColor: '#fdecea', color: '#c0607a', minHeight: 44 }}>
-              Del
-            </button>
-          </div>
-
           {/* Comments */}
           <div style={{ borderTop: '1px solid #d8e8d8' }} className="pt-4 space-y-3">
             <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>
@@ -827,6 +807,34 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
                 Add
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Sticky footer actions — always reachable, safe-area aware */}
+        <div className="shrink-0 p-4 sm:p-5 modal-bottom" style={{ borderTop: '1px solid #d8e8d8' }}>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const nextStatus = STATUS_NEXT[task.status]
+                if (nextStatus === 'done' && !confirm(`Mark "${task.title}" as done?`)) return
+                onPatch({ status: nextStatus })
+              }}
+              className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight"
+              style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}>
+              {STATUS_NEXT[task.status] === 'done' ? '✓' : '→'} {STATUS_LABEL[STATUS_NEXT[task.status]]}
+            </button>
+            <button
+              onClick={onEdit}
+              className="flex-1 min-w-0 text-sm font-medium rounded-xl text-white px-1 leading-tight"
+              style={{ backgroundColor: '#7a9e7e', minHeight: 44 }}>
+              Edit
+            </button>
+            <button
+              onClick={() => { if (confirm('Delete this task?')) { onDelete() } }}
+              className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight"
+              style={{ backgroundColor: '#fdecea', color: '#c0607a', minHeight: 44 }}>
+              Del
+            </button>
           </div>
         </div>
       </div>
