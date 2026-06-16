@@ -54,7 +54,7 @@ const PRIORITY_STYLE: Record<string, { bg: string; color: string }> = {
 }
 
 type Filter = 'all' | 'nick' | 'siobhan' | 'both' | 'taylor' | 'dad'
-type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify' | 'board'
+type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify'
 
 export default function DashboardClient({
   user,
@@ -215,20 +215,19 @@ export default function DashboardClient({
         </div>
       </header>
 
-      <div className={`mx-auto px-4 sm:px-6 py-4 sm:py-6 ${tab === 'board' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+      <div className={`mx-auto px-4 sm:px-6 py-4 sm:py-6 ${tab === 'tasks' ? 'max-w-7xl' : 'max-w-5xl'}`}>
 
         {/* Two-column layout on lg+ */}
         <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
 
           {/* Left: tasks (full width on mobile, 2/3 on lg, full on lg for board) */}
-          <div className={`space-y-4 ${tab === 'board' ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
+          <div className={`space-y-4 ${tab === 'tasks' ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
             {/* Tabs — scrollable so all tabs are always reachable on small screens */}
             <div className="flex gap-1 rounded-xl p-1 overflow-x-auto no-scrollbar" style={{ backgroundColor: '#d8e8d8', WebkitOverflowScrolling: 'touch' }}>
               {([
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
                 { key: 'review',    label: `Review${reviewTasks.length ? ` (${reviewTasks.length})` : ''}` },
-                { key: 'board',     label: 'Board', mobileHide: true },
                 { key: 'inventory', label: 'Items' },
                 ...(user.id === 'nick' ? [{ key: 'notify', label: 'Notify' }] : []),
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
@@ -261,39 +260,48 @@ export default function DashboardClient({
                   ))}
                 </div>
 
-                {displayed.length === 0 ? (
-                  <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks here yet</div>
-                ) : canDragReorder ? (
-                  <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={displayed.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                      <div className="drag-list space-y-2 pb-24 lg:pb-8">
-                        {displayed.map((task, i) => (
-                          <SortableTaskCard
-                            key={task.id}
-                            task={task}
-                            pos={i + 1}
-                            onDetail={() => setDetailTask(task)}
-                            onEdit={() => setEditTask(task)}
-                            onDelete={() => deleteTask(task.id)}
-                            onPatch={u => patchTask(task.id, u)}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <div className="space-y-2 pb-24 lg:pb-8">
-                    {displayed.map((task, i) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        pos={i + 1}
-                        onDetail={() => setDetailTask(task)}
-                        onEdit={() => setEditTask(task)}
-                        onDelete={() => deleteTask(task.id)}
-                        onPatch={u => patchTask(task.id, u)}
-                      />
-                    ))}
+                <div className={tab === 'tasks' ? 'lg:hidden' : ''}>
+                  {displayed.length === 0 ? (
+                    <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks here yet</div>
+                  ) : canDragReorder ? (
+                    <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                      <SortableContext items={displayed.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                        <div className="drag-list space-y-2 pb-24 lg:pb-8">
+                          {displayed.map((task, i) => (
+                            <SortableTaskCard
+                              key={task.id}
+                              task={task}
+                              pos={i + 1}
+                              onDetail={() => setDetailTask(task)}
+                              onEdit={() => setEditTask(task)}
+                              onDelete={() => deleteTask(task.id)}
+                              onPatch={u => patchTask(task.id, u)}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  ) : (
+                    <div className="space-y-2 pb-24 lg:pb-8">
+                      {displayed.map((task, i) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          pos={i + 1}
+                          onDetail={() => setDetailTask(task)}
+                          onEdit={() => setEditTask(task)}
+                          onDelete={() => deleteTask(task.id)}
+                          onPatch={u => patchTask(task.id, u)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Desktop: 3-column kanban replaces the list on the Active tab */}
+                {tab === 'tasks' && (
+                  <div className="hidden lg:block">
+                    <KanbanBoard tasks={displayed} onDetail={t => setDetailTask(t)} onPatch={patchTask} />
                   </div>
                 )}
               </div>
@@ -318,10 +326,6 @@ export default function DashboardClient({
               </div>
             )}
 
-            {/* Board — desktop-only scrum-style view */}
-            {tab === 'board' && (
-              <KanbanBoard tasks={tasks} onDetail={t => setDetailTask(t)} onPatch={patchTask} />
-            )}
 
             {/* Inventory */}
             {tab === 'inventory' && <InventoryList isAdmin={true} />}
@@ -337,8 +341,8 @@ export default function DashboardClient({
             )}
           </div>
 
-          {/* Right sidebar: calendar (lg only, hidden on board view) */}
-          {tab !== 'board' && (
+          {/* Right sidebar: calendar (lg only, hidden on the desktop kanban view) */}
+          {tab !== 'tasks' && (
             <div className="hidden lg:block lg:col-span-1 space-y-4">
               <Calendar tasks={tasks} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
             </div>
@@ -347,7 +351,7 @@ export default function DashboardClient({
       </div>
 
       {/* FAB — mobile only (desktop has header button), hidden on inventory/notify tabs */}
-      {tab !== 'inventory' && tab !== 'notify' && tab !== 'board' && <button
+      {tab !== 'inventory' && tab !== 'notify' && <button
         onClick={() => setShowCreate(true)}
         className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom sm:hidden"
         style={{ backgroundColor: '#d4849a' }}
@@ -457,7 +461,7 @@ function KanbanBoard({ tasks, onDetail, onPatch }: {
   }
 
   return (
-    <div className="hidden lg:grid lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-3 gap-4">
       {columns.map(col => (
         <div
           key={col.key}
