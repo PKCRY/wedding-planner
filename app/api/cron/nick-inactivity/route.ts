@@ -21,12 +21,7 @@ const LEVELS: { minHours: number; message: string }[] = [
   },
 ]
 
-export async function POST(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  if (!auth || auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export async function run() {
   // last_seen and inactivity_level are stored in push_subscriptions.subscription JSONB
   // to avoid needing a separate user_last_seen table
   const { data: row } = await supabase
@@ -36,7 +31,7 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!row) {
-    return NextResponse.json({ ok: true, reason: 'no push subscription for nick yet' })
+    return { ok: true, reason: 'no push subscription for nick yet' }
   }
 
   const lastSeen: string = row.subscription._last_seen ?? row.updated_at
@@ -49,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (targetLevel <= currentLevel) {
-    return NextResponse.json({ ok: true, reason: 'already notified at this level', level: currentLevel, hoursSince: Math.round(hoursSince) })
+    return { ok: true, reason: 'already notified at this level', level: currentLevel, hoursSince: Math.round(hoursSince) }
   }
 
   const level = LEVELS[targetLevel - 1]
@@ -69,5 +64,13 @@ export async function POST(req: NextRequest) {
     .update({ subscription: { ...row.subscription, _inactivity_level: targetLevel } })
     .eq('user_id', 'nick')
 
-  return NextResponse.json({ ok: true, sent: 1, level: targetLevel, hoursSince: Math.round(hoursSince) })
+  return { ok: true, sent: 1, level: targetLevel, hoursSince: Math.round(hoursSince) }
+}
+
+export async function POST(req: NextRequest) {
+  const auth = req.headers.get('authorization')
+  if (!auth || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return NextResponse.json(await run())
 }

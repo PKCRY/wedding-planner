@@ -3,12 +3,7 @@ import { supabase } from '@/lib/db'
 import { webpush } from '@/lib/push'
 import type { Task } from '@/lib/db'
 
-export async function POST(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  if (!auth || auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export async function run() {
   const { data: tasks, error } = await supabase
     .from('tasks')
     .select('id, title, priority, status, sort_order, assigned_to')
@@ -16,7 +11,7 @@ export async function POST(req: NextRequest) {
     .in('assigned_to', ['nick', 'both'])
     .order('sort_order', { ascending: true })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return { error: error.message }
 
   const activeTasks = (tasks as Task[]) ?? []
 
@@ -42,7 +37,7 @@ export async function POST(req: NextRequest) {
     .select('subscription')
     .eq('user_id', 'nick')
 
-  if (!subs?.length) return NextResponse.json({ ok: true, sent: 0 })
+  if (!subs?.length) return { ok: true, sent: 0 }
 
   const payload = JSON.stringify({
     title: 'Wedding Planner · Nick',
@@ -55,5 +50,13 @@ export async function POST(req: NextRequest) {
     subs.map(({ subscription }) => webpush.sendNotification(subscription, payload))
   )
 
-  return NextResponse.json({ ok: true, sent: subs.length, tasks: top.length, badge: badge_count })
+  return { ok: true, sent: subs.length, tasks: top.length, badge: badge_count }
+}
+
+export async function POST(req: NextRequest) {
+  const auth = req.headers.get('authorization')
+  if (!auth || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return NextResponse.json(await run())
 }
