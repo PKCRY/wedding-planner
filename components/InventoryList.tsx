@@ -57,7 +57,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } }),
   )
 
   useEffect(() => { load() }, [])
@@ -326,16 +326,25 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone, dragHandle }: 
             <button
               {...dragHandle}
               onContextMenu={(e) => e.preventDefault()}
-              className="touch-none p-1.5 rounded cursor-grab active:cursor-grabbing"
-              style={{ color: '#c8dcc8', WebkitTouchCallout: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+              onTouchStart={(e) => e.preventDefault()}
+              className="touch-none rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
+              style={{
+                color: '#b8d0ba',
+                WebkitTouchCallout: 'none',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'none',
+                minWidth: 36,
+                minHeight: 44,
+              }}
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <circle cx="5" cy="4" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="4" r="1.5" fill="currentColor"/>
-                <circle cx="5" cy="8" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="8" r="1.5" fill="currentColor"/>
-                <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="7" cy="5" r="2" fill="currentColor"/>
+                <circle cx="13" cy="5" r="2" fill="currentColor"/>
+                <circle cx="7" cy="10" r="2" fill="currentColor"/>
+                <circle cx="13" cy="10" r="2" fill="currentColor"/>
+                <circle cx="7" cy="15" r="2" fill="currentColor"/>
+                <circle cx="13" cy="15" r="2" fill="currentColor"/>
               </svg>
             </button>
           )}
