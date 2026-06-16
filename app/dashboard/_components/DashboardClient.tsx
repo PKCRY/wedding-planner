@@ -597,7 +597,6 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }
               {...dragHandle}
               onClick={e => e.stopPropagation()}
               onContextMenu={e => e.preventDefault()}
-              onTouchStart={e => e.preventDefault()}
               className="touch-none rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
               style={{
                 color: '#b8d0ba',
