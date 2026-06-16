@@ -349,7 +349,7 @@ export default function DashboardClient({
                   </div>
                 )}
 
-                <div className={tab === 'tasks' ? 'lg:hidden' : ''}>
+                <div className={tab === 'tasks' && !selectMode ? 'lg:hidden' : ''}>
                   {displayed.length === 0 ? (
                     <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks here yet</div>
                   ) : canDragReorder ? (
@@ -392,8 +392,8 @@ export default function DashboardClient({
                   )}
                 </div>
 
-                {/* Desktop: 3-column kanban replaces the list on the Active tab */}
-                {tab === 'tasks' && (
+                {/* Desktop: 3-column kanban replaces the list on the Active tab (unless selecting tasks) */}
+                {tab === 'tasks' && !selectMode && (
                   <div className="hidden lg:block">
                     <KanbanBoard tasks={displayed} onDetail={t => setDetailTask(t)} onPatch={patchTask} onRequestConfirm={askConfirm} />
                   </div>
@@ -717,14 +717,14 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
 
       <div className="relative flex items-center gap-2 pl-3 pr-3 py-3 pointer-events-none">
         {selectMode && (
-          <div className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: selected ? '#7a9e7e' : '#f0f4f0', border: selected ? 'none' : '1px solid #d8e8d8' }}>
-            {selected && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            )}
-          </div>
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={onToggleSelect}
+            onClick={e => e.stopPropagation()}
+            className="pointer-events-auto shrink-0"
+            style={{ width: 22, height: 22, accentColor: '#7a9e7e' }}
+          />
         )}
 
         {/* Content */}
