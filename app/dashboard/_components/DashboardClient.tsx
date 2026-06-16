@@ -583,11 +583,11 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, dragHandle }
         {/* Actions */}
         <div className="pointer-events-auto flex items-center gap-1 shrink-0">
           <button onClick={e => { e.stopPropagation(); cycleStatus() }}
-            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: isDone ? '#e8f4e8' : '#f0f4f0', color: '#7a9e7e' }}>{isDone ? '✓' : '↻'}</button>
+            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: isDone ? '#e8f4e8' : '#f0f4f0', color: '#7a9e7e' }}>✓</button>
           <button onClick={e => { e.stopPropagation(); onEdit() }}
-            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}>Edit</button>
+            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}>✏️</button>
           <button onClick={e => { e.stopPropagation(); onDelete() }}
-            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#fdecea', color: '#c0607a' }}>Del</button>
+            className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: '#fdecea', color: '#c0607a' }}>✕</button>
           {dragHandle && (
             <button
               {...dragHandle}
