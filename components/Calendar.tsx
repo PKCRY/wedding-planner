@@ -71,11 +71,11 @@ export default function Calendar({ tasks, events, onAddEvent, onDeleteEvent }: P
   return (
     <div className="bg-white rounded-2xl shadow-sm p-4" style={{ border: '1px solid #d8e8d8' }}>
       <div className="flex items-center justify-between mb-4">
-        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold" style={{ color: '#7a9e7e', backgroundColor: '#f0f4f0' }}>
+        <button onClick={prevMonth} className="w-11 h-11 flex items-center justify-center rounded-lg text-sm font-bold" style={{ color: '#7a9e7e', backgroundColor: '#f0f4f0' }}>
           ‹
         </button>
         <span className="font-semibold text-sm" style={{ color: '#2d4a30' }}>{MONTHS[month]} {year}</span>
-        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold" style={{ color: '#7a9e7e', backgroundColor: '#f0f4f0' }}>
+        <button onClick={nextMonth} className="w-11 h-11 flex items-center justify-center rounded-lg text-sm font-bold" style={{ color: '#7a9e7e', backgroundColor: '#f0f4f0' }}>
           ›
         </button>
       </div>
@@ -98,8 +98,8 @@ export default function Calendar({ tasks, events, onAddEvent, onDeleteEvent }: P
             <button
               key={i}
               onClick={() => setSelected(isSelected ? null : d)}
-              className="flex flex-col items-center py-1 rounded-lg transition-colors"
-              style={{ backgroundColor: isSelected ? '#d8e8d8' : isToday ? '#f0e8ec' : 'transparent' }}
+              className="flex flex-col items-center justify-center py-1 rounded-lg transition-colors"
+              style={{ minHeight: 44, backgroundColor: isSelected ? '#d8e8d8' : isToday ? '#f0e8ec' : 'transparent' }}
             >
               <span className="text-xs w-6 h-6 flex items-center justify-center rounded-full" style={{ color: '#2d4a30', fontWeight: isToday ? 700 : 400 }}>
                 {day}
@@ -134,11 +134,11 @@ export default function Calendar({ tasks, events, onAddEvent, onDeleteEvent }: P
 
           {sel?.evts.map(e => (
             <div key={e.id} className="flex items-center justify-between text-xs rounded-lg px-3 py-2 mb-1" style={{ backgroundColor: '#f3f0f8' }}>
-              <div>
+              <div className="min-w-0 break-words">
                 <span className="font-medium" style={{ color: '#2d4a30' }}>{e.title}</span>
                 {e.description && <span className="ml-1" style={{ color: '#9db89f' }}>{e.description}</span>}
               </div>
-              <button onClick={() => onDeleteEvent(e.id)} className="ml-2 text-sm" style={{ color: '#c0607a' }}>×</button>
+              <button onClick={() => onDeleteEvent(e.id)} className="ml-2 text-sm shrink-0" style={{ color: '#c0607a' }}>×</button>
             </div>
           ))}
 

@@ -299,26 +299,26 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone, dragHandle }: 
             {item.name}
           </p>
           {(item.quantity || item.responsible_party) && (
-            <p className="text-xs mt-0.5" style={{ color: '#9db89f' }}>
+            <p className="text-xs mt-0.5 break-words" style={{ color: '#9db89f' }}>
               {[item.quantity && `Qty: ${item.quantity}`, item.responsible_party].filter(Boolean).join(' · ')}
             </p>
           )}
           {item.notes && (
-            <p className="text-xs mt-0.5" style={{ color: '#b8d0ba' }}>{item.notes}</p>
+            <p className="text-xs mt-0.5 break-words" style={{ color: '#b8d0ba' }}>{item.notes}</p>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={onCycle}
             className="text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap"
-            style={{ backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
+            style={{ minHeight: 44, backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
           >
             {STATUS_LABEL[item.status]}
           </button>
           <button
             onClick={onEdit}
-            className="text-xs px-2 py-1.5 rounded-lg"
-            style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}
+            className="text-xs px-2 py-1.5 rounded-lg flex items-center justify-center"
+            style={{ minHeight: 44, backgroundColor: '#f0f4f0', color: '#7a9e7e' }}
           >
             Edit
           </button>
@@ -381,14 +381,11 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-end justify-center z-50"
+      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div
-        className="bg-white w-full max-w-lg rounded-t-3xl shadow-2xl max-h-[92vh] flex flex-col"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <div className="flex items-center justify-center pt-3 pb-1 shrink-0">
+      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-bottom">
+        <div className="sm:hidden flex items-center justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
         </div>
         <div className="flex items-center justify-between px-5 py-3 shrink-0" style={{ borderBottom: '1px solid #e4ede4' }}>
@@ -397,7 +394,7 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
           </p>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-xl"
+            className="w-11 h-11 flex items-center justify-center rounded-full text-xl"
             style={{ backgroundColor: '#f5f7f5', color: '#9db89f' }}
           >×</button>
         </div>

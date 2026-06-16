@@ -67,7 +67,7 @@ export default function PushManagerInline() {
           onClick={subscribed ? unsubscribe : subscribe}
           disabled={loading}
           className="text-sm font-medium px-4 rounded-xl text-white"
-          style={{ backgroundColor: subscribed ? '#9db89f' : '#d4849a', opacity: loading ? 0.6 : 1, minHeight: 40 }}
+          style={{ backgroundColor: subscribed ? '#9db89f' : '#d4849a', opacity: loading ? 0.6 : 1, minHeight: 44 }}
         >
           {loading ? '...' : subscribed ? 'Disable' : 'Enable'}
         </button>

@@ -299,19 +299,18 @@ function BottomSheet({ children, onClose, title }: {
 }) {
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-end justify-center z-50"
+      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white w-full max-w-lg rounded-t-3xl shadow-2xl max-h-[92vh] flex flex-col"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-bottom">
         {/* Handle */}
-        <div className="flex items-center justify-center pt-3 pb-1 shrink-0">
+        <div className="sm:hidden flex items-center justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
         </div>
         {title && (
           <div className="flex items-center justify-between px-5 py-3 shrink-0" style={{ borderBottom: '1px solid #e4ede4' }}>
             <p className="font-semibold text-base" style={{ color: '#2d4a30' }}>{title}</p>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-xl"
+            <button onClick={onClose} className="w-11 h-11 flex items-center justify-center rounded-full text-xl"
               style={{ backgroundColor: '#f5f7f5', color: '#9db89f' }}>×</button>
           </div>
         )}
@@ -338,7 +337,7 @@ function HerTaskCard({ task, onDetail }: {
       <button type="button" onClick={onDetail} className="absolute inset-0 w-full h-full z-0" />
       <div className="relative flex items-center px-5 pr-6 py-5 pointer-events-none">
         <div className="flex-1 min-w-0">
-          <p className={`font-semibold text-[17px] leading-snug ${isDone ? 'line-through' : ''}`}
+          <p className={`font-semibold text-[17px] leading-snug break-words ${isDone ? 'line-through' : ''}`}
             style={{ color: isDone ? '#b8d0ba' : '#2d4a30' }}>
             {task.title}
           </p>
@@ -416,14 +415,13 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-end justify-center z-50"
+      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white w-full max-w-lg rounded-t-3xl shadow-2xl max-h-[92vh] flex flex-col"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-bottom">
 
         {/* Handle */}
-        <div className="flex items-center justify-center pt-3 pb-2 shrink-0">
+        <div className="sm:hidden flex items-center justify-center pt-3 pb-2 shrink-0">
           <div className="w-10 h-1 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
         </div>
 
@@ -434,7 +432,7 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
               value={editFields.status}
               onChange={e => setEditFields(f => ({ ...f, status: e.target.value as Task['status'] }))}
               className="text-xs font-semibold px-3 py-1 rounded-full border-0 focus:outline-none appearance-none"
-              style={{ backgroundColor: editSt.bg, color: editSt.color }}
+              style={{ backgroundColor: editSt.bg, color: editSt.color, minHeight: 44 }}
             >
               <option value="pending">To Do</option>
               <option value="in_progress">In Progress</option>
@@ -451,18 +449,18 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
             {!editing && (
               <button onClick={startEditing}
                 className="flex items-center justify-center rounded-full text-xs font-semibold px-3"
-                style={{ backgroundColor: '#f5f7f5', color: '#5a7d5e', minHeight: 36 }}>
+                style={{ backgroundColor: '#f5f7f5', color: '#5a7d5e', minHeight: 44 }}>
                 Edit
               </button>
             )}
             <button onClick={onClose}
-              className="w-9 h-9 flex items-center justify-center rounded-full text-xl"
+              className="w-11 h-11 flex items-center justify-center rounded-full text-xl"
               style={{ backgroundColor: '#f5f7f5', color: '#9db89f' }}>×</button>
           </div>
         </div>
 
         {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 px-5 pb-6">
+        <div className="overflow-y-auto overflow-x-hidden flex-1 px-5 pb-6">
           {editing ? (
             <div className="space-y-4">
               <input
@@ -540,13 +538,13 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
           ) : (
             <div className="space-y-5">
               {/* Title */}
-              <h2 className={`text-xl font-bold leading-snug ${isDone ? 'line-through' : ''}`}
+              <h2 className={`text-xl font-bold leading-snug break-words ${isDone ? 'line-through' : ''}`}
                 style={{ color: isDone ? '#b8d0ba' : '#2d4a30' }}>
                 {task.title}
               </h2>
 
               {task.description && (
-                <p className="text-base leading-relaxed" style={{ color: '#5a7d5e' }}>{task.description}</p>
+                <p className="text-base leading-relaxed break-words" style={{ color: '#5a7d5e' }}>{task.description}</p>
               )}
 
               {/* Meta chips */}
@@ -631,14 +629,14 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
 
                 <div className="space-y-2">
                   {(task.task_comments ?? []).map((c: TaskComment, i: number) => (
-                    <div key={i} className="rounded-2xl px-4 py-3" style={{ backgroundColor: '#f5f7f5' }}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold" style={{ color: '#5a7d5e' }}>{c.name}</span>
-                        <span className="text-xs" style={{ color: '#b8d0ba' }}>
+                    <div key={i} className="rounded-2xl px-4 py-3 min-w-0" style={{ backgroundColor: '#f5f7f5' }}>
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="text-xs font-semibold break-words" style={{ color: '#5a7d5e' }}>{c.name}</span>
+                        <span className="text-xs shrink-0" style={{ color: '#b8d0ba' }}>
                           {new Date(c.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </span>
                       </div>
-                      <p className="text-sm leading-relaxed" style={{ color: '#2d4a30' }}>{c.text}</p>
+                      <p className="text-sm leading-relaxed break-words" style={{ color: '#2d4a30' }}>{c.text}</p>
                     </div>
                   ))}
                 </div>
