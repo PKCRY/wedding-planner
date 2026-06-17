@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
 
   const patch: Record<string, unknown> = {}
   for (const f of adminFields) {
-    if (updates[f] !== undefined) patch[f] = updates[f]
+    if (updates[f] !== undefined) patch[f] = f === 'due_date' ? (updates[f] || null) : updates[f]
   }
 
   if (updates.status) patch.status_changed_at = new Date().toISOString()

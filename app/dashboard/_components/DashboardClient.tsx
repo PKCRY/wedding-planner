@@ -583,6 +583,8 @@ export default function DashboardClient({
               const task = await res.json()
               setTasks(prev => [task, ...prev])
               setShowCreate(false)
+            } else {
+              return false
             }
           }}
         />
@@ -621,6 +623,7 @@ export default function DashboardClient({
           onSave={async data => {
             const updated = await patchTask(editTask.id, data)
             if (updated) { setEditTask(null); setDetailTask(updated) }
+            else return false
           }}
           onAddComment={async text => {
             await patchTask(editTask.id, { add_comment: text })
@@ -1098,7 +1101,7 @@ function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddCom
   knownAssignees: string[]
   categories: string[]
   onClose: () => void
-  onSave: (data: TaskFormData) => Promise<void>
+  onSave: (data: TaskFormData) => Promise<boolean | void>
   onAddComment?: (text: string) => Promise<void>
 }) {
   const [form, setForm] = useState<TaskFormData>({
@@ -1114,6 +1117,7 @@ function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddCom
     important_contacts: task?.important_contacts ?? '',
   })
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [commentText, setCommentText] = useState('')
   const [addingComment, setAddingComment] = useState(false)
   const [categorySheetOpen, setCategorySheetOpen] = useState(false)
@@ -1121,7 +1125,9 @@ function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddCom
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await onSave(form)
+    setSaveError('')
+    const result = await onSave(form)
+    if (result === false) setSaveError('Could not save — please try again.')
     setSaving(false)
   }
 
@@ -1278,7 +1284,10 @@ function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddCom
           </div>
 
           {/* sticky save footer */}
-          <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid #d8e8d8', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <div className="px-4 py-3 shrink-0 space-y-2" style={{ borderTop: '1px solid #d8e8d8', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            {saveError && (
+              <p className="text-sm text-center font-medium" style={{ color: '#c0607a' }}>{saveError}</p>
+            )}
             <button form="task-form" type="submit" disabled={saving}
               className="w-full font-medium rounded-xl text-white"
               style={{ backgroundColor: '#d4849a', opacity: saving ? 0.6 : 1, minHeight: 52 }}>
