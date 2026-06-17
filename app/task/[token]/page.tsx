@@ -57,7 +57,6 @@ export default function SharedTaskPage() {
         if (data) {
           setTask(data)
           setSelectedStatus(data.status)
-          setName(data.responsible_party || '')
         }
       })
       .finally(() => setLoading(false))
