@@ -195,7 +195,7 @@ export default function SharedTaskPage() {
                 <input
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Mum, Aiden…"
+                  placeholder="Your name"
                   required
                   className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
                   style={{ border: `1px solid ${name.trim() ? '#7a9e7e' : '#b8d0ba'}`, color: green }}
