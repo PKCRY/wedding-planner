@@ -41,6 +41,7 @@ export default function SharedTaskPage() {
   const [invalid, setInvalid] = useState(false)
 
   const [selectedStatus, setSelectedStatus] = useState<TaskStatus | ''>('')
+  const [name, setName] = useState('')
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -56,15 +57,17 @@ export default function SharedTaskPage() {
         if (data) {
           setTask(data)
           setSelectedStatus(data.status)
+          setName(data.responsible_party || '')
         }
       })
       .finally(() => setLoading(false))
   }, [token])
 
+  const canSubmit = name.trim().length > 0
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const statusChanged = selectedStatus !== task?.status
-    if (!statusChanged && !comment.trim()) return
+    if (!canSubmit) return
     setSubmitting(true)
     setSubmitError('')
     const statusToSend = selectedStatus !== task?.status ? selectedStatus : undefined
@@ -72,6 +75,7 @@ export default function SharedTaskPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        responsible_party: name.trim(),
         status: statusToSend || undefined,
         comment: comment.trim() || undefined,
       }),
@@ -145,14 +149,8 @@ export default function SharedTaskPage() {
             )}
           </div>
 
-          {(task.responsible_party || task.important_contacts || task.due_date) && (
+          {(task.important_contacts || task.due_date) && (
             <div className="px-4 py-3 space-y-2" style={{ borderTop: border }}>
-              {task.responsible_party && (
-                <div className="flex gap-2 text-sm">
-                  <span className="shrink-0" style={{ color: muted }}>Responsible</span>
-                  <span className="font-medium" style={{ color: green }}>{task.responsible_party}</span>
-                </div>
-              )}
               {task.important_contacts && (
                 <div className="flex gap-2 text-sm">
                   <span className="shrink-0" style={{ color: muted }}>Contacts</span>
@@ -188,7 +186,22 @@ export default function SharedTaskPage() {
         ) : (
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border }}>
             <div className="px-4 pt-4 pb-3 space-y-4">
-              <p className="text-sm font-semibold" style={{ color: green }}>Update progress</p>
+              <div>
+                <p className="text-sm font-semibold mb-0.5" style={{ color: green }}>Claim this task</p>
+                <p className="text-xs" style={{ color: muted }}>Enter your name to take responsibility and update the status.</p>
+              </div>
+
+              <div>
+                <p className="text-xs mb-2" style={{ color: muted }}>Your name <span style={{ color: '#c0607a' }}>*</span></p>
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Mum, Aiden…"
+                  required
+                  className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                  style={{ border: `1px solid ${name.trim() ? '#7a9e7e' : '#b8d0ba'}`, color: green }}
+                />
+              </div>
 
               <div>
                 <p className="text-xs mb-2" style={{ color: muted }}>Status</p>
@@ -210,7 +223,7 @@ export default function SharedTaskPage() {
                       >
                         {STATUS_LABEL[s]}
                         {isCurrent && (
-                          <span className="absolute top-1.5 right-2 text-xs font-normal" style={{ color: STATUS_STYLE[s].color, opacity: 0.7, fontSize: 10 }}>
+                          <span className="absolute top-1.5 right-2 font-normal" style={{ color: STATUS_STYLE[s].color, opacity: 0.7, fontSize: 10 }}>
                             current
                           </span>
                         )}
@@ -221,7 +234,7 @@ export default function SharedTaskPage() {
               </div>
 
               <div>
-                <p className="text-xs mb-2" style={{ color: muted }}>Comment (optional)</p>
+                <p className="text-xs mb-2" style={{ color: muted }}>Note (optional)</p>
                 <textarea
                   value={comment}
                   onChange={e => setComment(e.target.value)}
@@ -240,11 +253,11 @@ export default function SharedTaskPage() {
             <div className="px-4 pb-4">
               <button
                 type="submit"
-                disabled={submitting || (selectedStatus === task?.status && !comment.trim())}
+                disabled={submitting || !canSubmit}
                 className="w-full font-medium rounded-xl text-white"
-                style={{ backgroundColor: '#d4849a', opacity: submitting || (selectedStatus === task?.status && !comment.trim()) ? 0.5 : 1, minHeight: 52 }}
+                style={{ backgroundColor: '#d4849a', opacity: submitting || !canSubmit ? 0.5 : 1, minHeight: 52 }}
               >
-                {submitting ? 'Sending…' : 'Send update'}
+                {submitting ? 'Saving…' : 'Claim & update'}
               </button>
             </div>
           </form>

@@ -28,16 +28,21 @@ export async function PATCH(req: NextRequest, { params }: Context) {
 
   if (findErr || !task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const { status, comment, commenter_name } = await req.json()
+  const { status, comment, responsible_party } = await req.json()
+  const claimerName = responsible_party?.trim() || 'Collaborator'
 
   const patch: Record<string, unknown> = {}
+
+  if (responsible_party?.trim()) {
+    patch.responsible_party = responsible_party.trim()
+  }
 
   if (status && ['pending', 'in_progress', 'done', 'blocked'].includes(status)) {
     patch.status = status
     patch.status_changed_at = new Date().toISOString()
     if (status === 'done') {
       patch.completed_date = new Date().toISOString().slice(0, 10)
-      patch.completed_by = commenter_name?.trim() || 'Collaborator'
+      patch.completed_by = claimerName
     } else {
       patch.completed_date = null
       patch.completed_by = ''
@@ -47,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   if (comment?.trim()) {
     const newComment: TaskComment = {
       user: 'external',
-      name: commenter_name?.trim() || 'Collaborator',
+      name: claimerName,
       text: comment.trim(),
       at: new Date().toISOString(),
     }
