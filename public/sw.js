@@ -1,4 +1,4 @@
-// v3 — bump to force PWA refresh
+// v4 — absolute URLs for notificationclick navigation
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 
@@ -39,19 +39,20 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = event.notification.data?.url || '/'
+  const path = event.notification.data?.url || '/'
+  const absoluteUrl = path.startsWith('http') ? path : (self.location.origin + path)
 
   event.waitUntil(
     Promise.all([
       setBadge(0),
       clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
         for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.navigate(url)
+          if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+            client.navigate(absoluteUrl)
             return client.focus()
           }
         }
-        if (clients.openWindow) return clients.openWindow(url)
+        if (clients.openWindow) return clients.openWindow(absoluteUrl)
       }),
     ])
   )
