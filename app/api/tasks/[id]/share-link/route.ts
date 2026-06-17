@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
-import { makeShareToken } from '@/lib/share-token'
+import { supabase } from '@/lib/db'
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -11,11 +11,13 @@ export async function GET(_req: NextRequest, { params }: Context) {
   if (!session.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const taskId = Number(id)
-  if (Number.isNaN(taskId)) return NextResponse.json({ error: 'Bad id' }, { status: 400 })
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('share_token')
+    .eq('id', id)
+    .single()
 
-  const token = makeShareToken(taskId)
-  const url = `${BASE_URL}/task/${taskId}/${token}`
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  return NextResponse.json({ url })
+  return NextResponse.json({ url: `${BASE_URL}/task/${data.share_token}` })
 }

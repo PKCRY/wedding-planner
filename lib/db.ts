@@ -31,6 +31,7 @@ export interface Task {
   task_comments: TaskComment[]
   created_at: string
   created_by: string
+  share_token: string
 }
 
 export interface Event {

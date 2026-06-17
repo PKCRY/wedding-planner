@@ -34,7 +34,7 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
 }
 
 export default function SharedTaskPage() {
-  const { id, token } = useParams<{ id: string; token: string }>()
+  const { token } = useParams<{ token: string }>()
 
   const [task, setTask] = useState<SharedTask | null>(null)
   const [loading, setLoading] = useState(true)
@@ -48,21 +48,21 @@ export default function SharedTaskPage() {
   const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
-    fetch(`/api/task-share/${id}/${token}`)
+    fetch(`/api/task-share/${token}`)
       .then(r => {
         if (!r.ok) { setInvalid(true); return null }
         return r.json()
       })
       .then(data => { if (data) setTask(data) })
       .finally(() => setLoading(false))
-  }, [id, token])
+  }, [token])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedStatus && !comment.trim()) return
     setSubmitting(true)
     setSubmitError('')
-    const res = await fetch(`/api/task-share/${id}/${token}`, {
+    const res = await fetch(`/api/task-share/${token}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -123,7 +123,7 @@ export default function SharedTaskPage() {
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
         {/* Task card */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border }}>
-          <div className="px-4 pt-4 pb-2">
+          <div className="px-4 pt-4 pb-3">
             <div className="flex items-start gap-2 mb-3">
               <span className="text-xs font-medium px-2.5 py-1 rounded-full shrink-0" style={{ backgroundColor: st.bg, color: st.color }}>
                 {STATUS_LABEL[task.status]}
@@ -144,19 +144,19 @@ export default function SharedTaskPage() {
             <div className="px-4 py-3 space-y-2" style={{ borderTop: border }}>
               {task.responsible_party && (
                 <div className="flex gap-2 text-sm">
-                  <span style={{ color: muted }}>Responsible</span>
+                  <span className="shrink-0" style={{ color: muted }}>Responsible</span>
                   <span className="font-medium" style={{ color: green }}>{task.responsible_party}</span>
                 </div>
               )}
               {task.important_contacts && (
                 <div className="flex gap-2 text-sm">
-                  <span style={{ color: muted }}>Contacts</span>
+                  <span className="shrink-0" style={{ color: muted }}>Contacts</span>
                   <span className="font-medium" style={{ color: green }}>{task.important_contacts}</span>
                 </div>
               )}
               {task.due_date && (
                 <div className="flex gap-2 text-sm">
-                  <span style={{ color: muted }}>Due</span>
+                  <span className="shrink-0" style={{ color: muted }}>Due</span>
                   <span className="font-medium" style={{ color: green }}>
                     {new Date(task.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </span>
@@ -182,49 +182,52 @@ export default function SharedTaskPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border }}>
-            <div className="px-4 pt-4 pb-2">
-              <p className="text-sm font-semibold mb-3" style={{ color: green }}>Update progress</p>
+            <div className="px-4 pt-4 pb-3 space-y-4">
+              <p className="text-sm font-semibold" style={{ color: green }}>Update progress</p>
 
-              {/* Status picker */}
-              <p className="text-xs mb-2" style={{ color: muted }}>New status (optional)</p>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                {(Object.keys(STATUS_LABEL) as TaskStatus[]).map(s => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSelectedStatus(prev => prev === s ? '' : s)}
-                    className="rounded-xl px-3 py-3 text-sm font-medium text-left transition-colors"
-                    style={{
-                      backgroundColor: selectedStatus === s ? STATUS_STYLE[s].bg : '#f8faf8',
-                      color: selectedStatus === s ? STATUS_STYLE[s].color : muted,
-                      border: selectedStatus === s ? `2px solid ${STATUS_STYLE[s].color}` : '2px solid transparent',
-                    }}
-                  >
-                    {STATUS_LABEL[s]}
-                  </button>
-                ))}
+              <div>
+                <p className="text-xs mb-2" style={{ color: muted }}>New status (optional)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(STATUS_LABEL) as TaskStatus[]).map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSelectedStatus(prev => prev === s ? '' : s)}
+                      className="rounded-xl px-3 py-3 text-sm font-medium text-left transition-colors"
+                      style={{
+                        backgroundColor: selectedStatus === s ? STATUS_STYLE[s].bg : '#f8faf8',
+                        color: selectedStatus === s ? STATUS_STYLE[s].color : muted,
+                        border: selectedStatus === s ? `2px solid ${STATUS_STYLE[s].color}` : '2px solid transparent',
+                      }}
+                    >
+                      {STATUS_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Name */}
-              <p className="text-xs mb-2" style={{ color: muted }}>Your name</p>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Mum, Aiden…"
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none mb-3"
-                style={{ border: '1px solid #b8d0ba', color: green }}
-              />
+              <div>
+                <p className="text-xs mb-2" style={{ color: muted }}>Your name</p>
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Mum, Aiden…"
+                  className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                  style={{ border: '1px solid #b8d0ba', color: green }}
+                />
+              </div>
 
-              {/* Comment */}
-              <p className="text-xs mb-2" style={{ color: muted }}>Comment (optional)</p>
-              <textarea
-                value={comment}
-                onChange={e => setComment(e.target.value)}
-                placeholder="Any updates or notes…"
-                rows={3}
-                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
-                style={{ border: '1px solid #b8d0ba', color: green }}
-              />
+              <div>
+                <p className="text-xs mb-2" style={{ color: muted }}>Comment (optional)</p>
+                <textarea
+                  value={comment}
+                  onChange={e => setComment(e.target.value)}
+                  placeholder="Any updates or notes…"
+                  rows={3}
+                  className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+                  style={{ border: '1px solid #b8d0ba', color: green }}
+                />
+              </div>
             </div>
 
             {submitError && (
@@ -245,12 +248,12 @@ export default function SharedTaskPage() {
         )}
 
         {/* Comments */}
-        {task.task_comments?.length > 0 && (
+        {(task.task_comments?.length ?? 0) > 0 && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border }}>
             <p className="px-4 pt-4 pb-2 text-sm font-semibold" style={{ color: green }}>Comments</p>
-            <div className="divide-y" style={{ borderTop: border }}>
+            <div style={{ borderTop: border }}>
               {task.task_comments.map((c, i) => (
-                <div key={i} className="px-4 py-3">
+                <div key={i} className="px-4 py-3" style={{ borderTop: i > 0 ? border : undefined }}>
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span className="text-sm font-medium" style={{ color: green }}>{c.name}</span>
                     <span className="text-xs" style={{ color: muted }}>
