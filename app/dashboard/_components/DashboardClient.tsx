@@ -906,6 +906,22 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
   const [commentText, setCommentText] = useState('')
   const [saving, setSaving] = useState(false)
   const [positionText, setPositionText] = useState(String(task.sort_order ?? ''))
+  const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle')
+
+  async function handleShare() {
+    setShareState('loading')
+    const res = await fetch(`/api/tasks/${task.id}/share-link`)
+    if (!res.ok) { setShareState('idle'); return }
+    const { url } = await res.json()
+    if (navigator.share) {
+      try { await navigator.share({ title: task.title, url }) } catch { /* cancelled */ }
+      setShareState('idle')
+    } else {
+      await navigator.clipboard.writeText(url).catch(() => {})
+      setShareState('copied')
+      setTimeout(() => setShareState('idle'), 2000)
+    }
+  }
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
 
   function commitPosition() {
@@ -951,9 +967,29 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               {assigneeLabel(task.assigned_to)}
             </span>
           </div>
-          <button onClick={onClose}
-            className="w-11 h-11 flex items-center justify-center rounded-full text-xl shrink-0"
-            style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}>×</button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleShare}
+              disabled={shareState === 'loading'}
+              className="h-11 px-3 flex items-center gap-1.5 rounded-full text-sm font-medium transition-colors"
+              style={{ backgroundColor: shareState === 'copied' ? '#e8f4e8' : '#f0f4f0', color: shareState === 'copied' ? '#3a7a3a' : '#9db89f' }}
+            >
+              {shareState === 'copied' ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5 6.5-7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Copied
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11 1a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM5 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM11 10a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z" stroke="currentColor" strokeWidth="1.4"/><path d="M8.5 6.5l-3 2M8.5 9.5l-3-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                  {shareState === 'loading' ? '…' : 'Share'}
+                </>
+              )}
+            </button>
+            <button onClick={onClose}
+              className="w-11 h-11 flex items-center justify-center rounded-full text-xl shrink-0"
+              style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}>×</button>
+          </div>
         </div>
 
         {/* Scrollable body */}
