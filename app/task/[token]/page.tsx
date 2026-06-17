@@ -42,7 +42,6 @@ export default function SharedTaskPage() {
 
   const [selectedStatus, setSelectedStatus] = useState<TaskStatus | ''>('')
   const [comment, setComment] = useState('')
-  const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -53,22 +52,28 @@ export default function SharedTaskPage() {
         if (!r.ok) { setInvalid(true); return null }
         return r.json()
       })
-      .then(data => { if (data) setTask(data) })
+      .then(data => {
+        if (data) {
+          setTask(data)
+          setSelectedStatus(data.status)
+        }
+      })
       .finally(() => setLoading(false))
   }, [token])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedStatus && !comment.trim()) return
+    const statusChanged = selectedStatus !== task?.status
+    if (!statusChanged && !comment.trim()) return
     setSubmitting(true)
     setSubmitError('')
+    const statusToSend = selectedStatus !== task?.status ? selectedStatus : undefined
     const res = await fetch(`/api/task-share/${token}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        status: selectedStatus || undefined,
+        status: statusToSend || undefined,
         comment: comment.trim() || undefined,
-        commenter_name: name.trim() || undefined,
       }),
     })
     if (res.ok) {
@@ -186,35 +191,33 @@ export default function SharedTaskPage() {
               <p className="text-sm font-semibold" style={{ color: green }}>Update progress</p>
 
               <div>
-                <p className="text-xs mb-2" style={{ color: muted }}>New status (optional)</p>
+                <p className="text-xs mb-2" style={{ color: muted }}>Status</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {(Object.keys(STATUS_LABEL) as TaskStatus[]).map(s => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSelectedStatus(prev => prev === s ? '' : s)}
-                      className="rounded-xl px-3 py-3 text-sm font-medium text-left transition-colors"
-                      style={{
-                        backgroundColor: selectedStatus === s ? STATUS_STYLE[s].bg : '#f8faf8',
-                        color: selectedStatus === s ? STATUS_STYLE[s].color : muted,
-                        border: selectedStatus === s ? `2px solid ${STATUS_STYLE[s].color}` : '2px solid transparent',
-                      }}
-                    >
-                      {STATUS_LABEL[s]}
-                    </button>
-                  ))}
+                  {(Object.keys(STATUS_LABEL) as TaskStatus[]).map(s => {
+                    const isCurrent = s === task?.status
+                    const isSelected = s === selectedStatus
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSelectedStatus(s)}
+                        className="rounded-xl px-3 py-3 text-sm font-medium text-left transition-colors relative"
+                        style={{
+                          backgroundColor: isSelected ? STATUS_STYLE[s].bg : '#f8faf8',
+                          color: isSelected ? STATUS_STYLE[s].color : muted,
+                          border: isSelected ? `2px solid ${STATUS_STYLE[s].color}` : '2px solid transparent',
+                        }}
+                      >
+                        {STATUS_LABEL[s]}
+                        {isCurrent && (
+                          <span className="absolute top-1.5 right-2 text-xs font-normal" style={{ color: STATUS_STYLE[s].color, opacity: 0.7, fontSize: 10 }}>
+                            current
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
-              </div>
-
-              <div>
-                <p className="text-xs mb-2" style={{ color: muted }}>Your name</p>
-                <input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Mum, Aiden…"
-                  className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                  style={{ border: '1px solid #b8d0ba', color: green }}
-                />
               </div>
 
               <div>
@@ -237,9 +240,9 @@ export default function SharedTaskPage() {
             <div className="px-4 pb-4">
               <button
                 type="submit"
-                disabled={submitting || (!selectedStatus && !comment.trim())}
+                disabled={submitting || (selectedStatus === task?.status && !comment.trim())}
                 className="w-full font-medium rounded-xl text-white"
-                style={{ backgroundColor: '#d4849a', opacity: submitting || (!selectedStatus && !comment.trim()) ? 0.5 : 1, minHeight: 52 }}
+                style={{ backgroundColor: '#d4849a', opacity: submitting || (selectedStatus === task?.status && !comment.trim()) ? 0.5 : 1, minHeight: 52 }}
               >
                 {submitting ? 'Sending…' : 'Send update'}
               </button>
