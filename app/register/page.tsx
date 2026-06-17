@@ -4,10 +4,9 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -16,25 +15,21 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ name }),
     })
 
     const data = await res.json()
     setLoading(false)
 
     if (!res.ok) {
-      setError(data.error || 'Login failed')
+      setError(data.error || 'Something went wrong')
       return
     }
 
-    if (data.user.role === 'admin') {
-      router.push('/dashboard')
-    } else {
-      router.push('/her-dashboard')
-    }
+    router.push('/her-dashboard')
   }
 
   return (
@@ -45,42 +40,22 @@ export default function LoginPage() {
           <h1 className="text-4xl font-semibold mb-2" style={{ color: '#2d4a30', fontFamily: 'Georgia, serif' }}>
             Our Wedding
           </h1>
-          <p className="text-sm" style={{ color: '#9db89f' }}>Welcome back</p>
+          <p className="text-sm" style={{ color: '#9db89f' }}>Who are you?</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: '#5a7d5e' }}>
-              Username
+              Your name
             </label>
             <input
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoCapitalize="none"
-              autoComplete="username"
-              autoCorrect="off"
-              spellCheck={false}
-              required
-              className="w-full px-4 rounded-xl border focus:outline-none"
-              style={{
-                height: 52,
-                backgroundColor: '#fff',
-                borderColor: '#b8d0ba',
-                color: '#2d4a30',
-              }}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: '#5a7d5e' }}>
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Mum, John, Aunty Claire…"
+              autoCapitalize="words"
+              autoComplete="name"
+              autoFocus
               required
               className="w-full px-4 rounded-xl border focus:outline-none"
               style={{
@@ -107,14 +82,14 @@ export default function LoginPage() {
               letterSpacing: '0.05em',
             }}
           >
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? 'Joining…' : 'Join'}
           </button>
         </form>
 
         <p className="mt-6 text-xs text-center" style={{ color: '#9db89f' }}>
-          Not Nick or Siobhan?{' '}
-          <Link href="/register" style={{ color: '#7a9e7e', textDecoration: 'underline' }}>
-            Register here
+          Nick or Siobhan?{' '}
+          <Link href="/login" style={{ color: '#7a9e7e', textDecoration: 'underline' }}>
+            Sign in instead
           </Link>
         </p>
 

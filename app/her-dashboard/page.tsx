@@ -10,23 +10,29 @@ export default async function HerDashboardPage() {
   if (!session.user) redirect('/login')
   if (session.user.role !== 'member') redirect('/dashboard')
 
+  const memberId = session.user.id
+  const taskQuery = memberId === 'siobhan'
+    ? supabase.from('tasks').select('*').or('assigned_to.ilike.%siobhan%,assigned_to.eq.both')
+    : supabase.from('tasks').select('*').ilike('assigned_to', `%${memberId}%`)
+
   const [{ data: taskData }, { data: eventData }] = await Promise.all([
-    supabase.from('tasks').select('*').in('assigned_to', ['siobhan', 'both']),
+    taskQuery,
     supabase.from('events').select('*').order('date'),
   ])
 
   const allTasks = (taskData ?? []) as Task[]
   const events = (eventData ?? []) as Event[]
 
-  // Top 5 non-done sorted by sort_order
   const sorted = [...allTasks].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
-  const active = sorted.filter(t => t.status !== 'done')
-  const top5 = active.slice(0, 5)
+  const top5 = sorted.filter(t => t.status === 'pending' || t.status === 'in_progress').slice(0, 5)
+  const blocked = sorted.filter(t => t.status === 'blocked')
+
   return (<>
     <Heartbeat />
     <HerDashboardClient
       user={session.user}
       initialTop5={top5}
+      initialBlocked={blocked}
       initialEvents={events}
     />
   </>)

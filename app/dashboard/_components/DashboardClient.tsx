@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, type DragEvent } from 'react'
+import { useState, useEffect, useRef, useTransition, type DragEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DndContext,
@@ -43,12 +43,9 @@ const STATUS_LABEL: Record<string, string> = {
   pending: 'Pending', in_progress: 'In Progress', done: 'Done', blocked: 'Blocked',
 }
 
-const ASSIGN_LABEL: Record<string, string> = {
-  nick: 'Nick', siobhan: 'Siobhan', both: 'Both',
-  taylor: 'Taylor', dad: 'Dad', mom: 'Mom',
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
-
-const KNOWN_ASSIGNEES = ['nick', 'siobhan', 'taylor', 'dad', 'mom']
 
 function assignees(value: string): string[] {
   if (value === 'both') return ['nick', 'siobhan']
@@ -56,7 +53,7 @@ function assignees(value: string): string[] {
 }
 
 function assigneeLabel(value: string): string {
-  return assignees(value).map(v => ASSIGN_LABEL[v] ?? v).join(' & ') || value
+  return assignees(value).map(v => capitalize(v)).join(' & ') || value
 }
 
 function hasAssignee(value: string, who: string): boolean {
@@ -69,8 +66,38 @@ const PRIORITY_STYLE: Record<string, { bg: string; color: string }> = {
   low:    { bg: '#e8f4e8', color: '#2d6a30' },
 }
 
-type Filter = 'all' | 'nick' | 'siobhan' | 'both' | 'taylor' | 'dad'
+type Filter = string
 type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify'
+
+// Custom checkbox — native unchecked checkboxes render near-invisible on iOS Safari.
+function Checkbox({ checked, onChange }: { checked: boolean; onChange?: () => void }) {
+  return (
+    <span className="relative inline-flex items-center justify-center shrink-0" style={{ width: 24, height: 24 }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="absolute inset-0 cursor-pointer"
+        style={{ width: 24, height: 24, opacity: 0 }}
+      />
+      <span
+        className="flex items-center justify-center rounded-md pointer-events-none"
+        style={{
+          width: 22,
+          height: 22,
+          border: `2px solid ${checked ? '#7a9e7e' : '#9db89f'}`,
+          backgroundColor: checked ? '#7a9e7e' : '#fff',
+        }}
+      >
+        {checked && (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        )}
+      </span>
+    </span>
+  )
+}
 
 export default function DashboardClient({
   user,
@@ -95,7 +122,15 @@ export default function DashboardClient({
   const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [rankText, setRankText] = useState('')
+  const [knownAssignees, setKnownAssignees] = useState<string[]>(['nick', 'siobhan'])
   const [, startTransition] = useTransition()
+
+  useEffect(() => {
+    fetch('/api/assignees').then(r => r.ok ? r.json() : null).then(names => {
+      if (names) setKnownAssignees(names)
+    })
+  }, [])
 
   function askConfirm(message: string, onConfirm: () => void) {
     setConfirmState({ message, onConfirm })
@@ -105,6 +140,7 @@ export default function DashboardClient({
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
+      setSelectMode(next.size > 0)
       return next
     })
   }
@@ -112,6 +148,17 @@ export default function DashboardClient({
   function exitSelectMode() {
     setSelectMode(false)
     setSelectedIds(new Set())
+    setRankText('')
+  }
+
+  function toggleSelectAll(ids: number[]) {
+    const allSelected = ids.length > 0 && ids.every(id => selectedIds.has(id))
+    if (allSelected) {
+      exitSelectMode()
+    } else {
+      setSelectMode(true)
+      setSelectedIds(new Set(ids))
+    }
   }
 
   function bulkSetStatus(status: string) {
@@ -126,6 +173,16 @@ export default function DashboardClient({
     } else {
       apply()
     }
+  }
+
+  function bulkSetRank(rank: number) {
+    if (!selectedIds.size || Number.isNaN(rank)) return
+    const ids = tasks
+      .filter(t => selectedIds.has(t.id))
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(t => t.id)
+    ids.forEach((id, i) => patchTask(id, { sort_order: rank + i }))
+    exitSelectMode()
   }
 
 
@@ -180,6 +237,7 @@ export default function DashboardClient({
     setEvents(prev => prev.filter(e => e.id !== id))
   }
 
+  const knownCategories = Array.from(new Set(tasks.map(t => t.category).filter(Boolean))) as string[]
   const filtered = filter === 'all' ? tasks : tasks.filter(t => hasAssignee(t.assigned_to, filter))
   const reviewTasks = tasks.filter(t => t.created_by === 'siobhan' && t.status !== 'done')
   const searchLower = searchText.trim().toLowerCase()
@@ -291,7 +349,7 @@ export default function DashboardClient({
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
                 { key: 'review',    label: `Review${reviewTasks.length ? ` (${reviewTasks.length})` : ''}` },
-                { key: 'inventory', label: 'Items' },
+                { key: 'inventory', label: 'Inventory' },
                 ...(user.id === 'nick' ? [{ key: 'notify', label: 'Notify' }] : []),
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
               ] as { key: Tab; label: string; lgHide?: boolean; mobileHide?: boolean }[]).map(({ key, label, lgHide, mobileHide }) => (
@@ -309,58 +367,46 @@ export default function DashboardClient({
             {/* Task list */}
             {(tab === 'tasks' || tab === 'completed') && (
               <div>
-                {/* Select toggle — top-left, email-app style (tap to multi-select) */}
-                {tab === 'tasks' && (
-                  <div className="flex items-center justify-between mb-3">
-                    <button onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-                      className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-2"
-                      style={{ color: selectMode ? '#c0607a' : '#7a9e7e', minHeight: 44 }}>
-                      {selectMode ? (
-                        <>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 6 6 18M6 6l12 12" />
-                          </svg>
-                          Cancel
-                        </>
-                      ) : (
-                        <>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="5" width="6" height="6" rx="1.5" />
-                            <path d="M13 6h8M13 12h8M13 18h8" />
-                            <path d="M4.5 18.5 6 20l3-3" />
-                          </svg>
-                          Select
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Search + quick filter */}
-                <div className="flex gap-2 mb-4">
-                  <div className="relative flex-1">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                      className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#9db89f' }}>
+                {/* Search + assignee filter */}
+                <div className="flex flex-col gap-2 mb-4">
+                  <div className="relative">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9db89f' }}>
                       <circle cx="11" cy="11" r="8" />
                       <path d="m21 21-4.35-4.35" />
                     </svg>
                     <input
                       value={searchText}
                       onChange={e => setSearchText(e.target.value)}
-                      placeholder="Search tasks, people, or categories..."
-                      className="w-full rounded-xl pl-9 pr-3 text-sm focus:outline-none"
+                      placeholder="Search tasks, people, or categories…"
+                      className="w-full rounded-xl pl-10 pr-4 text-sm focus:outline-none"
                       style={{ backgroundColor: '#e8f0e8', color: '#2d4a30', minHeight: 44 }}
                     />
+                    {searchText && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchText('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+                        style={{ backgroundColor: '#b8d0ba', color: '#fff' }}
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
-                  <div className="flex gap-1 rounded-xl p-1 shrink-0" style={{ backgroundColor: '#e8f0e8' }}>
-                    {(['all', user.id, user.id === 'nick' ? 'siobhan' : 'nick'] as Filter[]).map(f => (
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                    {(['all', ...knownAssignees] as Filter[]).map(f => (
                       <button
                         key={f}
                         onClick={() => changeFilter(f)}
-                        className="shrink-0 text-sm font-medium rounded-lg transition-colors"
-                        style={{ backgroundColor: filter === f ? '#fff' : 'transparent', color: filter === f ? '#2d4a30' : '#7a9e7e', minHeight: 44, padding: '0 10px' }}
+                        className="shrink-0 text-sm font-medium rounded-full whitespace-nowrap transition-colors"
+                        style={{
+                          backgroundColor: filter === f ? '#2d4a30' : '#e8f0e8',
+                          color: filter === f ? '#fff' : '#5a7d5e',
+                          minHeight: 36,
+                          padding: '0 14px',
+                        }}
                       >
-                        {f === 'all' ? 'All' : f === user.id ? 'Mine' : ASSIGN_LABEL[f] ?? f}
+                        {f === 'all' ? 'All' : f === user.id ? `${capitalize(f)} (me)` : capitalize(f)}
                       </button>
                     ))}
                   </div>
@@ -369,8 +415,22 @@ export default function DashboardClient({
                 <div className={tab === 'tasks' && !selectMode ? 'lg:hidden' : ''}>
                   {displayed.length === 0 ? (
                     <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks here yet</div>
-                  ) : canDragReorder ? (
-                    <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  ) : selectedIds.size > 0 ? (
+                    <div className="flex items-center justify-between mb-2 pl-1">
+                      <label className="flex items-center gap-2 cursor-pointer" style={{ minHeight: 44 }}>
+                        <Checkbox
+                          checked={displayed.every(t => selectedIds.has(t.id))}
+                          onChange={() => toggleSelectAll(displayed.map(t => t.id))}
+                        />
+                        <span className="text-sm font-medium" style={{ color: '#7a9e7e' }}>Select all</span>
+                      </label>
+                      <button onClick={exitSelectMode} className="text-sm font-medium px-2" style={{ color: '#c0607a', minHeight: 44 }}>
+                        Clear
+                      </button>
+                    </div>
+                  ) : null}
+                  {displayed.length === 0 ? null : canDragReorder ? (
+                    <DndContext id="tasks-dnd" sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                       <SortableContext items={displayed.map(t => t.id)} strategy={verticalListSortingStrategy}>
                         <div className="drag-list space-y-2 pb-24 lg:pb-8">
                           {displayed.map((task, i) => (
@@ -383,6 +443,9 @@ export default function DashboardClient({
                               onDelete={() => deleteTask(task.id)}
                               onPatch={u => patchTask(task.id, u)}
                               onRequestConfirm={askConfirm}
+                              selectMode={tab === 'tasks' && selectMode}
+                              selected={selectedIds.has(task.id)}
+                              onToggleSelect={() => toggleSelect(task.id)}
                             />
                           ))}
                         </div>
@@ -409,7 +472,7 @@ export default function DashboardClient({
                   )}
                 </div>
 
-                {/* Desktop: 3-column kanban replaces the list on the Active tab (unless selecting tasks) */}
+                {/* Desktop: 4-column kanban replaces the list on the Active tab (unless selecting tasks) */}
                 {tab === 'tasks' && !selectMode && (
                   <div className="hidden lg:block">
                     <KanbanBoard tasks={displayed} onDetail={t => setDetailTask(t)} onPatch={patchTask} onRequestConfirm={askConfirm} />
@@ -467,7 +530,7 @@ export default function DashboardClient({
         <div className="fixed bottom-0 left-0 right-0 z-20 bg-white p-4 modal-bottom"
           style={{ borderTop: '1px solid #d8e8d8', boxShadow: '0 -4px 12px rgba(0,0,0,0.06)' }}>
           <p className="text-sm font-medium mb-2" style={{ color: '#2d4a30' }}>{selectedIds.size} selected — set status</p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2 mb-3">
             {(['pending', 'in_progress', 'done', 'blocked'] as const).map(status => (
               <button key={status} onClick={() => bulkSetStatus(status)}
                 className="text-xs font-medium rounded-xl px-1"
@@ -475,6 +538,23 @@ export default function DashboardClient({
                 {STATUS_LABEL[status]}
               </button>
             ))}
+          </div>
+          <p className="text-sm font-medium mb-2" style={{ color: '#2d4a30' }}>Set rank</p>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              value={rankText}
+              onChange={e => setRankText(e.target.value)}
+              placeholder="Rank #"
+              className="flex-1 rounded-xl px-3 focus:outline-none"
+              style={{ backgroundColor: '#e8f0e8', color: '#2d4a30', minHeight: 44 }}
+            />
+            <button onClick={() => bulkSetRank(parseInt(rankText, 10))}
+              disabled={rankText.trim() === ''}
+              className="text-sm font-medium rounded-xl px-4 shrink-0"
+              style={{ backgroundColor: '#7a9e7e', color: '#fff', minHeight: 44, opacity: rankText.trim() === '' ? 0.5 : 1 }}>
+              Set
+            </button>
           </div>
         </div>
       )}
@@ -490,6 +570,8 @@ export default function DashboardClient({
 
       {showCreate && (
         <TaskModal
+          knownAssignees={knownAssignees}
+          categories={knownCategories}
           onClose={() => setShowCreate(false)}
           onSave={async data => {
             const res = await fetch('/api/tasks', {
@@ -532,11 +614,13 @@ export default function DashboardClient({
 
       {editTask && (
         <TaskModal
+          knownAssignees={knownAssignees}
+          categories={knownCategories}
           task={editTask}
           onClose={() => setEditTask(null)}
           onSave={async data => {
             const updated = await patchTask(editTask.id, data)
-            if (updated) setEditTask(null)
+            if (updated) { setEditTask(null); setDetailTask(updated) }
           }}
           onAddComment={async text => {
             await patchTask(editTask.id, { add_comment: text })
@@ -603,12 +687,15 @@ function KanbanBoard({ tasks, onDetail, onPatch, onRequestConfirm }: {
   const columns: { key: string; label: string; status: Task['status']; tasks: Task[] }[] = [
     {
       key: 'backlog', label: 'Backlog', status: 'pending',
-      tasks: tasks.filter(t => t.status === 'pending' || t.status === 'blocked')
-        .sort((a, b) => a.sort_order - b.sort_order),
+      tasks: tasks.filter(t => t.status === 'pending').sort((a, b) => a.sort_order - b.sort_order),
     },
     {
       key: 'working', label: 'Working On', status: 'in_progress',
       tasks: tasks.filter(t => t.status === 'in_progress').sort((a, b) => a.sort_order - b.sort_order),
+    },
+    {
+      key: 'blocked', label: 'Blocked', status: 'blocked',
+      tasks: tasks.filter(t => t.status === 'blocked').sort((a, b) => a.sort_order - b.sort_order),
     },
     {
       key: 'done', label: 'Done', status: 'done',
@@ -631,7 +718,7 @@ function KanbanBoard({ tasks, onDetail, onPatch, onRequestConfirm }: {
   }
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-4 gap-4">
       {columns.map(col => (
         <div
           key={col.key}
@@ -667,11 +754,6 @@ function KanbanBoard({ tasks, onDetail, onPatch, onRequestConfirm }: {
                 <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
                   {assigneeLabel(task.assigned_to)}
                 </span>
-                {task.status === 'blocked' && (
-                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0e8ec', color: '#c0607a' }}>
-                    Blocked
-                  </span>
-                )}
               </div>
               <p className="text-sm font-medium leading-snug mb-1.5" style={{ color: '#2d4a30' }}>{task.title}</p>
               {task.due_date && (
@@ -692,6 +774,9 @@ function SortableTaskCard(props: {
   onDetail: () => void; onEdit: () => void
   onDelete: () => void; onPatch: (u: Record<string, unknown>) => void
   onRequestConfirm: (message: string, onConfirm: () => void) => void
+  selectMode?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.task.id })
   return (
@@ -734,20 +819,13 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
       <button type="button" onClick={selectMode ? onToggleSelect : onDetail} className="absolute inset-0 w-full h-full rounded-xl z-0" />
 
       <div className="relative flex items-center gap-1 pl-1 pr-3 py-3 pointer-events-none">
-        {selectMode && (
-          <label
-            onClick={e => e.stopPropagation()}
-            className="pointer-events-auto shrink-0 flex items-center justify-center cursor-pointer"
-            style={{ width: 44, height: 44 }}
-          >
-            <input
-              type="checkbox"
-              checked={!!selected}
-              onChange={onToggleSelect}
-              style={{ width: 24, height: 24, accentColor: '#7a9e7e' }}
-            />
-          </label>
-        )}
+        <label
+          onClick={e => e.stopPropagation()}
+          className="pointer-events-auto shrink-0 flex items-center justify-center cursor-pointer"
+          style={{ width: 44, height: 44 }}
+        >
+          <Checkbox checked={!!selected} onChange={onToggleSelect} />
+        </label>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -1015,8 +1093,10 @@ type TaskFormData = {
   blocked_by: string; responsible_party: string; important_contacts: string
 }
 
-function TaskModal({ task, onClose, onSave, onAddComment }: {
+function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddComment }: {
   task?: Task
+  knownAssignees: string[]
+  categories: string[]
   onClose: () => void
   onSave: (data: TaskFormData) => Promise<void>
   onAddComment?: (text: string) => Promise<void>
@@ -1036,6 +1116,7 @@ function TaskModal({ task, onClose, onSave, onAddComment }: {
   const [saving, setSaving] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [addingComment, setAddingComment] = useState(false)
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -1056,140 +1137,270 @@ function TaskModal({ task, onClose, onSave, onAddComment }: {
   const labelStyle = { color: '#9db89f' }
 
   return (
+    <>
+      <div
+        className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      >
+        <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col">
+          {/* drag handle — mobile only */}
+          <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+            <div className="w-9 h-1.5 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
+          </div>
+
+          {/* header */}
+          <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid #d8e8d8' }}>
+            <h2 className="font-semibold text-base" style={{ color: '#2d4a30' }}>{task ? 'Edit Task' : 'New Task'}</h2>
+            <button onClick={onClose} className="w-11 h-11 flex items-center justify-center text-xl rounded-full" style={{ color: '#9db89f', backgroundColor: '#f0f4f0' }}>×</button>
+          </div>
+
+          {/* scrollable body */}
+          <div className="flex-1 overflow-y-auto">
+            <form id="task-form" onSubmit={submit} className="p-4 space-y-3">
+              <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                placeholder="Task title" required
+                className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
+
+              <button
+                type="button"
+                onClick={() => setCategorySheetOpen(true)}
+                className="w-full rounded-xl px-4 py-3 text-left flex items-center justify-between focus:outline-none"
+                style={inputStyle}
+              >
+                <span style={{ color: form.category ? '#2d4a30' : '#9db89f' }}>
+                  {form.category || 'Select category…'}
+                </span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f', flexShrink: 0 }}>
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+
+              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                placeholder="Description (optional)" rows={2}
+                className="w-full rounded-xl px-4 py-3 focus:outline-none resize-none" style={inputStyle} />
+
+              <div>
+                <label className="text-sm mb-1.5 block" style={labelStyle}>Assign to</label>
+                <input
+                  list="assignee-suggestions"
+                  value={form.assigned_to}
+                  onChange={e => setForm({ ...form, assigned_to: e.target.value.toLowerCase().trim() })}
+                  placeholder="e.g. Nick, Mum, Aiden…"
+                  autoComplete="off"
+                  className="w-full rounded-xl px-4 py-3 focus:outline-none"
+                  style={inputStyle}
+                />
+                <datalist id="assignee-suggestions">
+                  {knownAssignees.map(name => (
+                    <option key={name} value={name}>{capitalize(name)}</option>
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="text-sm mb-1 block" style={labelStyle}>Status</label>
+                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
+                  className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle}>
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Done</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+              </div>
+
+              {form.status === 'blocked' && (
+                <input value={form.blocked_by} onChange={e => setForm({ ...form, blocked_by: e.target.value })}
+                  placeholder="Blocked by..."
+                  className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm mb-1 block" style={labelStyle}>Priority</label>
+                  <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
+                    className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle}>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm mb-1 block" style={labelStyle}>Due date</label>
+                  <input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })}
+                    className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle} />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm mb-1 block" style={labelStyle}>Responsible party</label>
+                <input value={form.responsible_party} onChange={e => setForm({ ...form, responsible_party: e.target.value })}
+                  placeholder="e.g. Siobhan and Mom"
+                  className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
+              </div>
+
+              <div>
+                <label className="text-sm mb-1 block" style={labelStyle}>Important contacts</label>
+                <input value={form.important_contacts} onChange={e => setForm({ ...form, important_contacts: e.target.value })}
+                  placeholder="Names / numbers"
+                  className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
+              </div>
+            </form>
+
+            {task && (
+              <div className="px-4 pb-4 space-y-2" style={{ borderTop: '1px solid #d8e8d8' }}>
+                <p className="text-sm font-semibold pt-3" style={{ color: '#2d4a30' }}>Comments</p>
+                {(task.task_comments ?? []).length === 0 && (
+                  <p className="text-sm" style={{ color: '#b8d0ba' }}>No comments yet.</p>
+                )}
+                {(task.task_comments ?? []).map((c: TaskComment, i: number) => (
+                  <div key={i} className="text-sm rounded-lg px-3 py-2" style={{ backgroundColor: '#f0f4f0' }}>
+                    <span className="font-medium" style={{ color: '#5a7d5e' }}>{c.name}</span>
+                    <span className="ml-2 text-xs" style={{ color: '#9db89f' }}>
+                      {new Date(c.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                    <p className="mt-0.5" style={{ color: '#2d4a30' }}>{c.text}</p>
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <input value={commentText} onChange={e => setCommentText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && submitComment()}
+                    placeholder="Add a comment..."
+                    className="flex-1 rounded-xl px-4 py-3 focus:outline-none"
+                    style={{ border: '1px solid #b8d0ba', color: '#2d4a30' }} />
+                  <button onClick={submitComment} disabled={!commentText.trim() || addingComment}
+                    className="px-4 text-white rounded-xl font-medium"
+                    style={{ backgroundColor: '#7a9e7e', opacity: !commentText.trim() || addingComment ? 0.5 : 1, minHeight: 52 }}>
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* sticky save footer */}
+          <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid #d8e8d8', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+            <button form="task-form" type="submit" disabled={saving}
+              className="w-full font-medium rounded-xl text-white"
+              style={{ backgroundColor: '#d4849a', opacity: saving ? 0.6 : 1, minHeight: 52 }}>
+              {saving ? 'Saving...' : task ? 'Save Changes' : 'Create Task'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {categorySheetOpen && (
+        <CategoryPickerSheet
+          categories={categories}
+          value={form.category}
+          onSelect={cat => setForm({ ...form, category: cat })}
+          onClose={() => setCategorySheetOpen(false)}
+        />
+      )}
+    </>
+  )
+}
+
+function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
+  categories: string[]
+  value: string
+  onSelect: (cat: string) => void
+  onClose: () => void
+}) {
+  const [showNewInput, setShowNewInput] = useState(false)
+  const [newCatText, setNewCatText] = useState('')
+  const newInputRef = useRef<HTMLInputElement>(null)
+
+  function handleAdd() {
+    const trimmed = newCatText.trim()
+    if (!trimmed) return
+    onSelect(trimmed)
+    onClose()
+  }
+
+  return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-end justify-center z-[60]"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 sticky top-0 bg-white rounded-t-2xl z-10" style={{ borderBottom: '1px solid #d8e8d8' }}>
-          <h2 className="font-semibold text-base" style={{ color: '#2d4a30' }}>{task ? 'Edit Task' : 'New Task'}</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-xl rounded-full" style={{ color: '#9db89f', backgroundColor: '#f0f4f0' }}>×</button>
+      <div className="bg-white rounded-t-3xl w-full max-w-lg shadow-2xl flex flex-col" style={{ maxHeight: '70vh' }}>
+        {/* drag handle */}
+        <div className="flex justify-center pt-2.5 pb-1 shrink-0">
+          <div className="w-9 h-1.5 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
         </div>
 
-        <form onSubmit={submit} className="p-4 space-y-3">
-          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-            placeholder="Task title" required
-            className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
+        {/* header */}
+        <div className="flex items-center justify-between px-4 pb-3 shrink-0">
+          <h3 className="font-semibold text-base" style={{ color: '#2d4a30' }}>Category</h3>
+          <button onClick={onClose} className="w-11 h-11 flex items-center justify-center rounded-full text-xl"
+            style={{ color: '#9db89f', backgroundColor: '#f0f4f0' }}>×</button>
+        </div>
 
-          <input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-            placeholder="Category (e.g. Flowers, DJ, Venue)"
-            className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
+        {/* list */}
+        <div className="overflow-y-auto flex-1">
+          {categories.map((cat, i) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => { onSelect(cat); onClose() }}
+              className="w-full flex items-center justify-between px-5 text-sm"
+              style={{
+                minHeight: 52,
+                color: value === cat ? '#7a9e7e' : '#2d4a30',
+                fontWeight: value === cat ? 600 : 400,
+                borderTop: i === 0 ? '1px solid #f0f4f0' : '1px solid #f0f4f0',
+                backgroundColor: 'transparent',
+              }}
+            >
+              <span>{cat}</span>
+              {value === cat && (
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M3.75 9l3.75 3.75 6.75-7.5" stroke="#7a9e7e" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          ))}
 
-          <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-            placeholder="Description (optional)" rows={2}
-            className="w-full rounded-xl px-4 py-3 focus:outline-none resize-none" style={inputStyle} />
-
-          <div>
-            <label className="text-sm mb-1.5 block" style={labelStyle}>Assign to</label>
-            <div className="grid grid-cols-2 gap-2">
-              {KNOWN_ASSIGNEES.map(who => {
-                const checked = assignees(form.assigned_to).includes(who)
-                return (
-                  <label key={who}
-                    className="flex items-center gap-2 rounded-xl px-3 cursor-pointer"
-                    style={{ ...inputStyle, minHeight: 44, backgroundColor: checked ? '#e8f0e8' : '#fff' }}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={e => {
-                        const current = new Set(assignees(form.assigned_to))
-                        if (e.target.checked) current.add(who); else current.delete(who)
-                        const next = KNOWN_ASSIGNEES.filter(k => current.has(k))
-                        setForm({ ...form, assigned_to: next.join(',') })
-                      }}
-                      className="w-4 h-4"
-                    />
-                    <span className="text-sm" style={{ color: '#2d4a30' }}>{ASSIGN_LABEL[who]}</span>
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm mb-1 block" style={labelStyle}>Status</label>
-            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
-              className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle}>
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="done">Done</option>
-              <option value="blocked">Blocked</option>
-            </select>
-          </div>
-
-          {form.status === 'blocked' && (
-            <input value={form.blocked_by} onChange={e => setForm({ ...form, blocked_by: e.target.value })}
-              placeholder="Blocked by..."
-              className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm mb-1 block" style={labelStyle}>Priority</label>
-              <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
-                className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle}>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-sm mb-1 block" style={labelStyle}>Due date</label>
-              <input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })}
-                className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle} />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm mb-1 block" style={labelStyle}>Responsible party</label>
-            <input value={form.responsible_party} onChange={e => setForm({ ...form, responsible_party: e.target.value })}
-              placeholder="e.g. Siobhan and Mom"
-              className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
-          </div>
-
-          <div>
-            <label className="text-sm mb-1 block" style={labelStyle}>Important contacts</label>
-            <input value={form.important_contacts} onChange={e => setForm({ ...form, important_contacts: e.target.value })}
-              placeholder="Names / numbers"
-              className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
-          </div>
-
-          <button type="submit" disabled={saving}
-            className="w-full font-medium rounded-xl text-white"
-            style={{ backgroundColor: '#d4849a', opacity: saving ? 0.6 : 1, minHeight: 52 }}>
-            {saving ? 'Saving...' : task ? 'Save Changes' : 'Create Task'}
-          </button>
-        </form>
-
-        {task && (
-          <div className="px-4 pb-4 space-y-2" style={{ borderTop: '1px solid #d8e8d8' }}>
-            <p className="text-sm font-semibold pt-3" style={{ color: '#2d4a30' }}>Comments</p>
-            {(task.task_comments ?? []).length === 0 && (
-              <p className="text-sm" style={{ color: '#b8d0ba' }}>No comments yet.</p>
-            )}
-            {(task.task_comments ?? []).map((c: TaskComment, i: number) => (
-              <div key={i} className="text-sm rounded-lg px-3 py-2" style={{ backgroundColor: '#f0f4f0' }}>
-                <span className="font-medium" style={{ color: '#5a7d5e' }}>{c.name}</span>
-                <span className="ml-2 text-xs" style={{ color: '#9db89f' }}>
-                  {new Date(c.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
-                <p className="mt-0.5" style={{ color: '#2d4a30' }}>{c.text}</p>
+          {/* add new category — inline, no popup */}
+          <div style={{ borderTop: '1px solid #d8e8d8' }}>
+            {showNewInput ? (
+              <div className="flex gap-2 px-4 py-3">
+                <input
+                  ref={newInputRef}
+                  autoFocus
+                  value={newCatText}
+                  onChange={e => setNewCatText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                  placeholder="Category name"
+                  className="flex-1 rounded-xl px-4 py-3 text-sm focus:outline-none"
+                  style={{ border: '1px solid #b8d0ba', color: '#2d4a30' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  disabled={!newCatText.trim()}
+                  className="rounded-xl px-5 text-sm font-medium text-white"
+                  style={{ backgroundColor: '#7a9e7e', opacity: newCatText.trim() ? 1 : 0.45, minHeight: 48 }}
+                >
+                  Add
+                </button>
               </div>
-            ))}
-            <div className="flex gap-2 pt-1">
-              <input value={commentText} onChange={e => setCommentText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && submitComment()}
-                placeholder="Add a comment..."
-                className="flex-1 rounded-xl px-4 py-3 focus:outline-none"
-                style={{ border: '1px solid #b8d0ba', color: '#2d4a30' }} />
-              <button onClick={submitComment} disabled={!commentText.trim() || addingComment}
-                className="px-4 text-white rounded-xl font-medium"
-                style={{ backgroundColor: '#7a9e7e', opacity: !commentText.trim() || addingComment ? 0.5 : 1, minHeight: 52 }}>
-                Add
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setShowNewInput(true); setTimeout(() => newInputRef.current?.focus(), 50) }}
+                className="w-full flex items-center gap-3 px-5 text-sm font-medium"
+                style={{ minHeight: 52, color: '#d4849a' }}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M9 3.75v10.5M3.75 9h10.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                </svg>
+                Add new category
               </button>
-            </div>
+            )}
           </div>
-        )}
+        </div>
+
+        <div className="shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
       </div>
     </div>
   )

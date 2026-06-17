@@ -27,19 +27,22 @@ const STATUS_LABEL: Record<string, string> = {
   pending: 'To Do', in_progress: 'In Progress', done: 'Done', blocked: 'Blocked',
 }
 
-type Tab = 'tasks' | 'calendar' | 'inventory'
+type Tab = 'tasks' | 'blocked' | 'calendar' | 'inventory'
 
 export default function HerDashboardClient({
   user,
   initialTop5,
+  initialBlocked,
   initialEvents,
 }: {
   user: SessionUser
   initialTop5: Task[]
+  initialBlocked: Task[]
   initialEvents: Event[]
 }) {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>(initialTop5)
+  const [blockedTasks, setBlockedTasks] = useState<Task[]>(initialBlocked)
   const [events, setEvents] = useState<Event[]>(initialEvents)
   const [tab, setTab] = useState<Tab>('tasks')
   const [showAdd, setShowAdd] = useState(false)
@@ -58,9 +61,15 @@ export default function HerDashboardClient({
     if (listRes.ok) {
       const next = await listRes.json() as Task[]
       setTasks(next)
+      await refreshBlocked()
       return next
     }
     return tasks
+  }
+
+  async function refreshBlocked() {
+    const res = await fetch('/api/tasks?blocked=1')
+    if (res.ok) setBlockedTasks(await res.json() as Task[])
   }
 
   async function refreshCompleted() {
@@ -162,6 +171,7 @@ export default function HerDashboardClient({
         <div className="flex gap-1 rounded-2xl p-1" style={{ backgroundColor: '#e4ede4' }}>
           {([
             { key: 'tasks',     label: 'My Tasks' },
+            { key: 'blocked',   label: `Blocked${blockedTasks.length > 0 ? ` (${blockedTasks.length})` : ''}` },
             { key: 'inventory', label: 'Inventory' },
             { key: 'calendar',  label: 'Calendar' },
           ] as { key: Tab; label: string }[]).map(({ key, label }) => (
@@ -169,9 +179,10 @@ export default function HerDashboardClient({
               className="flex-1 text-sm font-semibold rounded-xl transition-all"
               style={{
                 backgroundColor: tab === key ? '#fff' : 'transparent',
-                color: tab === key ? '#2d4a30' : '#9db89f',
+                color: tab === key ? (key === 'blocked' ? '#c0607a' : '#2d4a30') : (key === 'blocked' && blockedTasks.length > 0 ? '#c0607a' : '#9db89f'),
                 minHeight: 44,
                 boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                fontSize: 13,
               }}>
               {label}
             </button>
@@ -232,6 +243,31 @@ export default function HerDashboardClient({
           </>
         )}
 
+        {tab === 'blocked' && (
+          blockedTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-2">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ backgroundColor: '#fce8ef' }}>
+                🎉
+              </div>
+              <p className="font-semibold text-base" style={{ color: '#2d4a30' }}>Nothing blocked!</p>
+              <p className="text-sm text-center" style={{ color: '#b8d0ba' }}>All clear — no tasks waiting on anything.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs px-1" style={{ color: '#9db89f' }}>
+                These tasks are waiting on something. Check in or ask Nick.
+              </p>
+              {blockedTasks.map(task => (
+                <HerTaskCard
+                  key={task.id}
+                  task={task}
+                  onDetail={() => setDetailTask(task)}
+                />
+              ))}
+            </div>
+          )
+        )}
+
         {tab === 'inventory' && <InventoryList isAdmin={false} />}
 
         {tab === 'calendar' && (
@@ -256,6 +292,8 @@ export default function HerDashboardClient({
           task={detailTask}
           onClose={() => setDetailTask(null)}
           onMarkDone={() => setStatus(detailTask, 'done')}
+          onMarkBlocked={() => setStatus(detailTask, 'blocked')}
+          onUnblock={() => setStatus(detailTask, 'in_progress')}
           onAddComment={text => addComment(detailTask.id, text)}
           onEdit={updates => editTask(detailTask.id, updates)}
         />
@@ -356,10 +394,12 @@ function HerTaskCard({ task, onDetail }: {
   )
 }
 
-function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
+function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, onAddComment, onEdit }: {
   task: Task
   onClose: () => void
   onMarkDone: () => void
+  onMarkBlocked: () => void
+  onUnblock: () => void
   onAddComment: (text: string) => Promise<void>
   onEdit: (updates: Partial<Task>) => Promise<void>
 }) {
@@ -592,9 +632,22 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
                 </div>
               )}
 
-              {/* Mark done — two-step confirm */}
+              {/* Quick actions */}
               {!isDone && (
-                confirmDone ? (
+                task.status === 'blocked' ? (
+                  <div className="flex gap-3">
+                    <button onClick={() => { onUnblock(); onClose() }}
+                      className="flex-1 font-semibold rounded-2xl text-white"
+                      style={{ backgroundColor: '#7a9e7e', minHeight: 56 }}>
+                      Unblock → In Progress
+                    </button>
+                    <button onClick={() => { onMarkDone(); onClose() }}
+                      className="font-semibold rounded-2xl text-white px-4"
+                      style={{ backgroundColor: '#d4849a', minHeight: 56 }}>
+                      Done ✓
+                    </button>
+                  </div>
+                ) : confirmDone ? (
                   <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: '#fce8ef', border: '1px solid #f0b8c8' }}>
                     <p className="text-base font-semibold text-center" style={{ color: '#2d4a30' }}>
                       Are you sure this is complete?
@@ -613,11 +666,18 @@ function TaskDetailModal({ task, onClose, onMarkDone, onAddComment, onEdit }: {
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setConfirmDone(true)}
-                    className="w-full font-semibold rounded-2xl text-white"
-                    style={{ backgroundColor: '#d4849a', minHeight: 56 }}>
-                    Mark as Done
-                  </button>
+                  <div className="flex gap-3">
+                    <button onClick={() => setConfirmDone(true)}
+                      className="flex-1 font-semibold rounded-2xl text-white"
+                      style={{ backgroundColor: '#d4849a', minHeight: 56 }}>
+                      Mark as Done
+                    </button>
+                    <button onClick={() => { onMarkBlocked(); onClose() }}
+                      className="font-semibold rounded-2xl px-4"
+                      style={{ backgroundColor: '#f0e8ec', color: '#c0607a', minHeight: 56 }}>
+                      Blocked
+                    </button>
+                  </div>
                 )
               )}
 

@@ -6,37 +6,7 @@ const USERS = {
     id: 'nick',
     name: 'Nick',
     role: 'admin' as const,
-    password: 'SecretCampCard2026',
-  },
-  planning: {
-    id: 'planning',
-    name: 'Planning',
-    role: 'admin' as const,
-    password: 'CampCard2026',
-  },
-  mom: {
-    id: 'mom',
-    name: 'Mom',
-    role: 'admin' as const,
-    password: 'SecretCampCard2026',
-  },
-  motherofthebride: {
-    id: 'motherofthebride',
-    name: 'Mom',
-    role: 'admin' as const,
-    password: 'CampCard2026',
-  },
-  taylor: {
-    id: 'taylor',
-    name: 'Taylor',
-    role: 'admin' as const,
-    password: 'SecretCampCard2026',
-  },
-  dad: {
-    id: 'dad',
-    name: 'Dad',
-    role: 'admin' as const,
-    password: 'SecretCampCard2026',
+    password: process.env.NICK_PASSWORD,
   },
   siobhan: {
     id: 'siobhan',

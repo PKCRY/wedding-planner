@@ -26,27 +26,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(sortTasks(data ?? []))
   }
 
-  // Member (Siobhan): top N non-done tasks, or completed tasks if ?completed=1
+  // Member: Siobhan sees her tasks + 'both'; other helpers see only their assigned tasks
   const { searchParams } = new URL(req.url)
   const wantCompleted = searchParams.get('completed') === '1'
+  const wantBlocked = searchParams.get('blocked') === '1'
+  const memberId = session.user.id
 
-  const { data: all, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .or('assigned_to.ilike.%siobhan%,assigned_to.eq.both')
+  const query = supabase.from('tasks').select('*')
+  const { data: all, error } = await (memberId === 'siobhan'
+    ? query.or('assigned_to.ilike.%siobhan%,assigned_to.eq.both')
+    : query.ilike('assigned_to', `%${memberId}%`)
+  )
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const sorted = sortTasks(all ?? [])
-  const active = sorted.filter((t) => t.status !== 'done')
   const done = sorted.filter((t) => t.status === 'done')
+  const blocked = sorted.filter((t) => t.status === 'blocked')
+  const workable = sorted.filter((t) => t.status === 'pending' || t.status === 'in_progress')
 
   if (wantCompleted) return NextResponse.json(done)
+  if (wantBlocked) return NextResponse.json(blocked)
 
-  const top5 = active.slice(0, TOP_N)
-  const res = NextResponse.json(top5)
+  const res = NextResponse.json(workable.slice(0, TOP_N))
   res.headers.set('x-total', String(sorted.length))
   res.headers.set('x-done', String(done.length))
+  res.headers.set('x-blocked', String(blocked.length))
   return res
 }
 

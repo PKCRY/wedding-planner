@@ -20,7 +20,8 @@ export default function NotificationAutoPrompt() {
     if (!isStandalone) return
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return
     if (Notification.permission !== 'default') return
-    if (localStorage.getItem('notif-prompt-dismissed')) return
+    // In standalone (installed PWA), ignore browser-side dismissal so the prompt still shows
+    if (!isStandalone && localStorage.getItem('notif-prompt-dismissed')) return
 
     navigator.serviceWorker.ready.then(async (reg) => {
       const sub = await reg.pushManager.getSubscription()

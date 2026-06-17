@@ -1,4 +1,4 @@
-// v2 — bump to force PWA refresh
+// v3 — bump to force PWA refresh
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 

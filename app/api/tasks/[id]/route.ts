@@ -39,15 +39,8 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     }
 
     if (updates.add_comment && typeof updates.add_comment === 'string' && updates.add_comment.trim()) {
-      const { data: current } = await supabase
-        .from('tasks')
-        .select('task_comments')
-        .eq('id', id)
-        .in('assigned_to', ['siobhan', 'both'])
-        .single()
-
+      const { data: current } = await supabase.from('tasks').select('task_comments').eq('id', id).single()
       if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
       const comment: TaskComment = {
         user: session.user.id,
         name: session.user.name,
@@ -62,12 +55,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     }
 
     const { data, error } = await supabase
-      .from('tasks')
-      .update(patch)
-      .eq('id', id)
-      .in('assigned_to', ['siobhan', 'both'])
-      .select()
-      .single()
+      .from('tasks').update(patch).eq('id', id).select().single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
