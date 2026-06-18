@@ -350,7 +350,8 @@ function SortableItemCard(props: ItemCardProps) {
 function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps) {
   return (
     <div
-      className="relative bg-white rounded-2xl overflow-hidden"
+      onClick={onEdit}
+      className="relative bg-white rounded-2xl overflow-hidden cursor-pointer"
       style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e4ede4', userSelect: 'none', WebkitUserSelect: 'none' }}
     >
       <div className="pl-4 pr-4 py-3.5 flex items-center gap-3">
@@ -372,22 +373,16 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={onCycle}
+            onClick={e => { e.stopPropagation(); onCycle() }}
             className="text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap"
             style={{ minHeight: 44, backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
           >
             {STATUS_LABEL[item.status]}
           </button>
-          <button
-            onClick={onEdit}
-            className="text-xs px-2 py-1.5 rounded-lg flex items-center justify-center"
-            style={{ minHeight: 44, backgroundColor: '#f0f4f0', color: '#7a9e7e' }}
-          >
-            Edit
-          </button>
           {dragHandle && (
             <button
               {...dragHandle}
+              onClick={e => e.stopPropagation()}
               onContextMenu={(e) => e.preventDefault()}
               onTouchStart={(e) => e.preventDefault()}
               className="touch-none rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
