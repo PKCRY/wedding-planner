@@ -207,131 +207,183 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      {/* Category filter chips */}
-      {knownCategories.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
-          {(['all', ...knownCategories, ...(hasUncategorized ? ['__none__'] : [])] as string[]).map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className="shrink-0 text-sm font-medium rounded-full whitespace-nowrap transition-colors"
-              style={{
-                backgroundColor: categoryFilter === cat ? '#2d4a30' : '#e8f0e8',
-                color: categoryFilter === cat ? '#fff' : '#5a7d5e',
-                minHeight: 36,
-                padding: '0 14px',
-              }}
-            >
-              {cat === 'all' ? 'All' : cat === '__none__' ? 'Other' : cat}
-            </button>
-          ))}
-        </div>
-      )}
-
-
-      {/* Active items */}
-      {filteredActive.length === 0 && (
-        <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
-          {search.trim() ? 'No items match your search.' : categoryFilter === 'all' ? 'All items acquired!' : 'No items in this category.'}
-        </div>
-      )}
-
-      {categoryFilter === 'all' && filteredActive.length > 0 ? (
-        /* Grouped view — no drag */
-        <div className="space-y-4">
-          {knownCategories.map(cat => {
-            const catItems = allActive.filter(i => i.category === cat).filter(matchesSearch)
-            if (catItems.length === 0) return null
-            return (
-              <div key={cat}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#7a9e7e' }}>{cat}</span>
-                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>{catItems.length}</span>
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
-                </div>
-                <div className="space-y-2">
-                  {catItems.map(item => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      isAdmin={isAdmin}
-                      onCycle={() => cycleStatus(item)}
-                      onEdit={() => setEditItem(item)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-          {hasUncategorized && (() => {
-            const uncatItems = allActive.filter(i => !i.category).filter(matchesSearch)
-            if (uncatItems.length === 0) return null
-            return (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Other</span>
-                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0f4f0', color: '#b8d0ba' }}>
-                    {uncatItems.length}
-                  </span>
-                  <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
-                </div>
-                <div className="space-y-2">
-                  {uncatItems.map(item => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      isAdmin={isAdmin}
-                      onCycle={() => cycleStatus(item)}
-                      onEdit={() => setEditItem(item)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-      ) : filteredActive.length > 0 ? (
-        /* Filtered + draggable view */
-        <div className="drag-list">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={filteredActive.map(i => i.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {filteredActive.map(item => (
-                  <SortableItemCard
-                    key={item.id}
-                    item={item}
-                    isAdmin={isAdmin}
-                    onCycle={() => cycleStatus(item)}
-                    onEdit={() => setEditItem(item)}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
-      ) : null}
-
-      {/* Acquired section */}
-      {filteredAcquired.length > 0 && (
-        <>
-          <div className="pt-4 pb-1 flex items-center gap-2">
-            <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
-            <span className="text-xs font-semibold uppercase tracking-wide px-2" style={{ color: '#b8d0ba' }}>
-              Done · {filteredAcquired.length}
-            </span>
-            <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+      {/* ── MOBILE: category chips + list ── */}
+      <div className="lg:hidden space-y-3">
+        {knownCategories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+            {(['all', ...knownCategories, ...(hasUncategorized ? ['__none__'] : [])] as string[]).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className="shrink-0 text-sm font-medium rounded-full whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: categoryFilter === cat ? '#2d4a30' : '#e8f0e8',
+                  color: categoryFilter === cat ? '#fff' : '#5a7d5e',
+                  minHeight: 36,
+                  padding: '0 14px',
+                }}
+              >
+                {cat === 'all' ? 'All' : cat === '__none__' ? 'Other' : cat}
+              </button>
+            ))}
           </div>
-          {filteredAcquired.map(item => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              isAdmin={isAdmin}
-              onCycle={() => cycleStatus(item)}
-              onEdit={() => setEditItem(item)}
-            />
-          ))}
-        </>
-      )}
+        )}
+
+        {filteredActive.length === 0 && (
+          <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
+            {search.trim() ? 'No items match your search.' : categoryFilter === 'all' ? 'All items acquired!' : 'No items in this category.'}
+          </div>
+        )}
+
+        {categoryFilter === 'all' && filteredActive.length > 0 ? (
+          <div className="space-y-4">
+            {knownCategories.map(cat => {
+              const catItems = allActive.filter(i => i.category === cat).filter(matchesSearch)
+              if (catItems.length === 0) return null
+              return (
+                <div key={cat}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#7a9e7e' }}>{cat}</span>
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>{catItems.length}</span>
+                    <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+                  </div>
+                  <div className="space-y-2">
+                    {catItems.map(item => (
+                      <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+            {hasUncategorized && (() => {
+              const uncatItems = allActive.filter(i => !i.category).filter(matchesSearch)
+              if (uncatItems.length === 0) return null
+              return (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Other</span>
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0f4f0', color: '#b8d0ba' }}>
+                      {allActive.filter(i => !i.category).filter(matchesSearch).length}
+                    </span>
+                    <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+                  </div>
+                  <div className="space-y-2">
+                    {uncatItems.map(item => (
+                      <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        ) : filteredActive.length > 0 ? (
+          <div className="drag-list">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={filteredActive.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {filteredActive.map(item => (
+                    <SortableItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+        ) : null}
+
+        {filteredAcquired.length > 0 && (
+          <>
+            <div className="pt-4 pb-1 flex items-center gap-2">
+              <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+              <span className="text-xs font-semibold uppercase tracking-wide px-2" style={{ color: '#b8d0ba' }}>Done · {filteredAcquired.length}</span>
+              <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+            </div>
+            {filteredAcquired.map(item => (
+              <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* ── DESKTOP: category dashboard grid ── */}
+      <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 gap-4 pb-8">
+        {[...knownCategories, ...(hasUncategorized ? ['__none__'] : [])].map(cat => {
+          const catLabel = cat === '__none__' ? 'Other' : cat
+          const catAll = cat === '__none__'
+            ? items.filter(i => !i.category)
+            : items.filter(i => i.category === cat)
+          const catVisible = catAll.filter(matchesSearch)
+          if (catVisible.length === 0) return null
+          const doneCount = catVisible.filter(i => i.status === 'acquired').length
+          const pct = catVisible.length > 0 ? Math.round((doneCount / catVisible.length) * 100) : 0
+          const activeVisible = catVisible.filter(i => i.status !== 'acquired')
+          const acquiredVisible = catVisible.filter(i => i.status === 'acquired')
+          return (
+            <div key={cat} className="rounded-2xl overflow-hidden flex flex-col" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+              {/* Card header */}
+              <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #f0f4f0' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-sm" style={{ color: '#2d4a30' }}>{catLabel}</span>
+                  <span className="text-xs font-medium tabular-nums" style={{ color: '#b8d0ba' }}>{doneCount} / {catVisible.length}</span>
+                </div>
+                {/* Progress bar */}
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#e4ede4' }}>
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
+                </div>
+              </div>
+              {/* Items */}
+              <div className="flex-1 divide-y" style={{ borderColor: '#f5f7f5' }}>
+                {activeVisible.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setEditItem(item)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#f5f7f5] transition-colors"
+                  >
+                    <span className="flex-1 text-sm font-medium leading-snug" style={{ color: '#2d4a30' }}>{item.name}</span>
+                    <span
+                      onClick={e => { e.stopPropagation(); cycleStatus(item) }}
+                      className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer"
+                      style={{ backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
+                    >
+                      {STATUS_LABEL[item.status]}
+                    </span>
+                  </button>
+                ))}
+                {acquiredVisible.length > 0 && (
+                  <details className="group">
+                    <summary className="flex items-center gap-2 px-4 py-2 cursor-pointer text-xs font-semibold select-none list-none" style={{ color: '#b8d0ba' }}>
+                      <svg className="w-3 h-3 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="none">
+                        <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Done · {acquiredVisible.length}
+                    </summary>
+                    {acquiredVisible.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => setEditItem(item)}
+                        className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-[#f5f7f5] transition-colors"
+                      >
+                        <span className="flex-1 text-sm line-through" style={{ color: '#b8d0ba' }}>{item.name}</span>
+                        <span
+                          onClick={e => { e.stopPropagation(); cycleStatus(item) }}
+                          className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer"
+                          style={{ backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
+                        >
+                          {STATUS_LABEL[item.status]}
+                        </span>
+                      </button>
+                    ))}
+                  </details>
+                )}
+              </div>
+            </div>
+          )
+        })}
+        {items.filter(matchesSearch).length === 0 && (
+          <div className="col-span-full py-16 text-center text-sm" style={{ color: '#b8d0ba' }}>
+            {search.trim() ? 'No items match your search.' : 'No inventory items yet.'}
+          </div>
+        )}
+      </div>
 
       {/* FAB */}
       <button
