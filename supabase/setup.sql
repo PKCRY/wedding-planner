@@ -67,7 +67,8 @@ ALTER TABLE tasks
   ADD COLUMN IF NOT EXISTS completed_date     date,
   ADD COLUMN IF NOT EXISTS completed_by       text    NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS task_comments      jsonb   NOT NULL DEFAULT '[]'::jsonb,
-  ADD COLUMN IF NOT EXISTS status_changed_at  timestamptz;
+  ADD COLUMN IF NOT EXISTS status_changed_at  timestamptz,
+  ADD COLUMN IF NOT EXISTS share_note         text    NOT NULL DEFAULT '';
 
 -- ── Migrate old field value if upgrading ──────────────────────────────────
 
@@ -88,3 +89,4 @@ CREATE TABLE IF NOT EXISTS inventory (
   created_by        text         NOT NULL DEFAULT ''
 );
 ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS quantity_have text NOT NULL DEFAULT '';

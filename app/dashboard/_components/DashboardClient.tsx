@@ -907,12 +907,22 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
   const [saving, setSaving] = useState(false)
   const [positionText, setPositionText] = useState(String(task.sort_order ?? ''))
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle')
+  const [showShareCompose, setShowShareCompose] = useState(false)
+  const [shareNote, setShareNote] = useState(task.share_note ?? '')
 
-  async function handleShare() {
+  async function doShare(note: string) {
     setShareState('loading')
+    if (note !== (task.share_note ?? '')) {
+      await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ share_note: note }),
+      })
+    }
     const res = await fetch(`/api/tasks/${task.id}/share-link`)
     if (!res.ok) { setShareState('idle'); return }
     const { url } = await res.json()
+    setShowShareCompose(false)
     if (navigator.share) {
       try { await navigator.share({ title: task.title, url }) } catch { /* cancelled */ }
       setShareState('idle')
@@ -946,6 +956,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
   }
 
   return (
+    <>
     <div
       className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 sm:p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -969,7 +980,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={handleShare}
+              onClick={() => setShowShareCompose(true)}
               disabled={shareState === 'loading'}
               className="h-11 px-3 flex items-center gap-1.5 rounded-full text-sm font-medium transition-colors"
               style={{ backgroundColor: shareState === 'copied' ? '#e8f4e8' : '#f0f4f0', color: shareState === 'copied' ? '#3a7a3a' : '#9db89f' }}
@@ -1123,6 +1134,50 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
         </div>
       </div>
     </div>
+
+    {showShareCompose && (
+      <div
+        className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[60] sm:p-4"
+        onClick={e => { if (e.target === e.currentTarget) setShowShareCompose(false) }}
+      >
+        <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+          <div className="sm:hidden flex justify-center pt-2.5 pb-1">
+            <div className="w-9 h-1.5 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
+          </div>
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #d8e8d8' }}>
+            <h3 className="font-semibold text-base" style={{ color: '#2d4a30' }}>Share task</h3>
+            <button
+              onClick={() => setShowShareCompose(false)}
+              className="w-11 h-11 flex items-center justify-center rounded-full text-xl"
+              style={{ backgroundColor: '#f0f4f0', color: '#9db89f' }}
+            >×</button>
+          </div>
+          <div className="p-4 space-y-3" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+            <div>
+              <p className="text-xs mb-2" style={{ color: '#9db89f' }}>Add a message (optional)</p>
+              <textarea
+                value={shareNote}
+                onChange={e => setShareNote(e.target.value)}
+                placeholder="e.g. Can you handle this? Call the venue before June 30…"
+                rows={3}
+                autoFocus
+                className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+                style={{ border: '1px solid #b8d0ba', color: '#2d4a30' }}
+              />
+            </div>
+            <button
+              onClick={() => doShare(shareNote)}
+              disabled={shareState === 'loading'}
+              className="w-full font-medium rounded-xl text-white"
+              style={{ backgroundColor: '#d4849a', opacity: shareState === 'loading' ? 0.5 : 1, minHeight: 52 }}
+            >
+              {shareState === 'loading' ? 'Getting link…' : 'Share link'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 

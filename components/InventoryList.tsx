@@ -38,9 +38,9 @@ const STATUS_TEXT: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  needed:   'Needed',
-  partial:  'In Progress',
-  acquired: 'Acquired',
+  needed:   'Still Need',
+  partial:  'Partially Complete',
+  acquired: 'Done',
 }
 
 const NEXT_STATUS: Record<string, InventoryItem['status']> = {
@@ -99,19 +99,6 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     }).catch(() => {})
   }
 
-  async function toggleDone(item: InventoryItem) {
-    const next = item.status === 'acquired' ? 'needed' : 'acquired'
-    const res = await fetch(`/api/inventory/${item.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: next }),
-    })
-    if (res.ok) {
-      const updated = await res.json() as InventoryItem
-      setItems(prev => prev.map(i => i.id === item.id ? updated : i))
-    }
-  }
-
   async function saveItem(id: number | null, data: Partial<InventoryItem>) {
     if (id === null) {
       const res = await fetch('/api/inventory', {
@@ -154,17 +141,20 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-3 pb-24">
 
       {/* Summary bar */}
-      <div className="rounded-2xl p-4 flex flex-wrap gap-4" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
+      <div className="rounded-2xl p-4 flex flex-wrap gap-x-5 gap-y-2 items-center" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
         {(['needed', 'partial', 'acquired'] as const).map(s => (
           <div key={s} className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_BAR[s] }} />
-            <span className="text-xs font-semibold" style={{ color: STATUS_TEXT[s] }}>
-              {counts[s]} {STATUS_LABEL[s]}
+            <span className="text-xs font-bold tabular-nums" style={{ color: STATUS_TEXT[s] }}>
+              {counts[s]}
+            </span>
+            <span className="text-xs" style={{ color: STATUS_TEXT[s] }}>
+              {STATUS_LABEL[s]}
             </span>
           </div>
         ))}
-        <span className="text-xs ml-auto" style={{ color: '#b8d0ba' }}>
-          {counts.acquired}/{items.length} acquired
+        <span className="text-xs font-semibold ml-auto tabular-nums" style={{ color: '#b8d0ba' }}>
+          {counts.acquired} / {items.length} done
         </span>
       </div>
 
@@ -193,7 +183,6 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
               isAdmin={isAdmin}
               onCycle={() => cycleStatus(item)}
               onEdit={() => setEditItem(item)}
-              onToggleDone={() => toggleDone(item)}
             />
           ))}
         </SortableContext>
@@ -206,7 +195,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           <div className="pt-4 pb-1 flex items-center gap-2">
             <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
             <span className="text-xs font-semibold uppercase tracking-wide px-2" style={{ color: '#b8d0ba' }}>
-              Acquired · {acquired.length}
+              Done · {acquired.length}
             </span>
             <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
           </div>
@@ -217,7 +206,6 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
               isAdmin={isAdmin}
               onCycle={() => cycleStatus(item)}
               onEdit={() => setEditItem(item)}
-              onToggleDone={() => toggleDone(item)}
             />
           ))}
         </>
@@ -252,7 +240,6 @@ type ItemCardProps = {
   isAdmin: boolean
   onCycle: CardCb
   onEdit: CardCb
-  onToggleDone: CardCb
   dragHandle?: Record<string, unknown>
 }
 function SortableItemCard(props: ItemCardProps) {
@@ -267,40 +254,28 @@ function SortableItemCard(props: ItemCardProps) {
   )
 }
 
-function ItemCard({ item, isAdmin, onCycle, onEdit, onToggleDone, dragHandle }: ItemCardProps) {
-  const isAcquired = item.status === 'acquired'
+function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps) {
   return (
     <div
       className="relative bg-white rounded-2xl overflow-hidden"
       style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e4ede4', userSelect: 'none', WebkitUserSelect: 'none' }}
     >
       <div className="pl-4 pr-4 py-3.5 flex items-center gap-3">
-        {/* Checkbox to mark acquired / unmark */}
-        <button
-          onClick={onToggleDone}
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors"
-          style={{
-            backgroundColor: isAcquired ? '#7a9e7e' : '#fff',
-            border: `2px solid ${isAcquired ? '#7a9e7e' : '#b8d0ba'}`,
-          }}
-        >
-          {isAcquired && (
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2.5 7L5.5 10L11.5 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-
         <div className="flex-1 min-w-0">
           <p
-            className={`font-semibold text-[15px] leading-snug ${isAcquired ? 'line-through' : ''}`}
-            style={{ color: isAcquired ? '#b8d0ba' : '#2d4a30' }}
+            className="font-semibold text-[15px] leading-snug"
+            style={{ color: '#2d4a30' }}
           >
             {item.name}
           </p>
-          {(item.quantity || item.responsible_party) && (
+          {(item.quantity || item.quantity_have || item.responsible_party) && (
             <p className="text-xs mt-0.5 break-words" style={{ color: '#9db89f' }}>
-              {[item.quantity && `Qty: ${item.quantity}`, item.responsible_party].filter(Boolean).join(' · ')}
+              {[
+                item.quantity && (item.quantity_have
+                  ? `${item.quantity_have} / ${item.quantity}`
+                  : `Qty: ${item.quantity}`),
+                item.responsible_party,
+              ].filter(Boolean).join(' · ')}
             </p>
           )}
           {item.notes && (
@@ -363,6 +338,7 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
 }) {
   const [name, setName] = useState(item?.name ?? '')
   const [quantity, setQuantity] = useState(item?.quantity ?? '')
+  const [quantityHave, setQuantityHave] = useState(item?.quantity_have ?? '')
   const [status, setStatus] = useState<InventoryItem['status']>(item?.status ?? 'needed')
   const [responsibleParty, setResponsibleParty] = useState(item?.responsible_party ?? '')
   const [notes, setNotes] = useState(item?.notes ?? '')
@@ -375,7 +351,7 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
     if (!name.trim()) return
     setSaving(true)
     const parsed = sortOrder !== '' ? parseInt(sortOrder, 10) : undefined
-    await onSave({ name: name.trim(), quantity, status, responsible_party: responsibleParty, notes, ...(parsed != null && !isNaN(parsed) ? { sort_order: parsed } : {}) })
+    await onSave({ name: name.trim(), quantity, quantity_have: quantityHave, status, responsible_party: responsibleParty, notes, ...(parsed != null && !isNaN(parsed) ? { sort_order: parsed } : {}) })
     setSaving(false)
   }
 
@@ -409,22 +385,31 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
             className="w-full rounded-2xl px-4 py-3 text-base font-semibold focus:outline-none"
             style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
           />
-          <input
-            value={quantity}
-            onChange={e => setQuantity(e.target.value)}
-            placeholder="Quantity (e.g. 200, ~100)"
-            className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none"
-            style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
-          />
+          <div className="flex gap-2">
+            <input
+              value={quantityHave}
+              onChange={e => setQuantityHave(e.target.value)}
+              placeholder="Have so far"
+              className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+            />
+            <input
+              value={quantity}
+              onChange={e => setQuantity(e.target.value)}
+              placeholder="Total needed"
+              className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+            />
+          </div>
           <select
             value={status}
             onChange={e => setStatus(e.target.value as InventoryItem['status'])}
             className="w-full rounded-2xl px-4 py-3 text-sm font-semibold focus:outline-none appearance-none"
             style={{ border: '1px solid #d8e8d8', backgroundColor: STATUS_BG[status], color: STATUS_TEXT[status] }}
           >
-            <option value="needed">Needed</option>
-            <option value="partial">In Progress</option>
-            <option value="acquired">Acquired</option>
+            <option value="needed">Still Need</option>
+            <option value="partial">Partially Complete</option>
+            <option value="acquired">Done</option>
           </select>
           <div className="flex gap-2">
             <input

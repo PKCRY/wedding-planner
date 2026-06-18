@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: Context) {
 
   const { data, error } = await supabase
     .from('tasks')
-    .select('id,title,description,category,assigned_to,status,priority,due_date,responsible_party,important_contacts,task_comments')
+    .select('id,title,description,category,assigned_to,status,priority,due_date,responsible_party,important_contacts,task_comments,share_note')
     .eq('share_token', token)
     .single()
 

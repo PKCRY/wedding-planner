@@ -29,6 +29,7 @@ export interface Task {
   responsible_party: string
   important_contacts: string
   task_comments: TaskComment[]
+  share_note: string
   created_at: string
   created_by: string
   share_token: string
@@ -47,6 +48,7 @@ export interface InventoryItem {
   id: number
   name: string
   quantity: string
+  quantity_have: string
   status: 'needed' | 'partial' | 'acquired'
   responsible_party: string
   notes: string

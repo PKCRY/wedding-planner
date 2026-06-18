@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
     const patch: Record<string, unknown> = {}
 
     const memberFields = ['title', 'description', 'due_date',
-      'responsible_party', 'important_contacts', 'blocked_by'] as const
+      'responsible_party', 'important_contacts', 'blocked_by', 'share_note'] as const
     for (const f of memberFields) {
       if (updates[f] !== undefined) patch[f] = f === 'due_date' ? (updates[f] || null) : updates[f]
     }
@@ -76,7 +76,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   // Admin: full update
   const adminFields = ['title', 'description', 'category', 'assigned_to', 'priority',
     'sort_order', 'due_date', 'status', 'blocked_by', 'responsible_party',
-    'important_contacts'] as const
+    'important_contacts', 'share_note'] as const
 
   const patch: Record<string, unknown> = {}
   for (const f of adminFields) {
