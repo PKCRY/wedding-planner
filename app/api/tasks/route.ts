@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(sortTasks(data ?? []))
   }
 
-  // Member: Siobhan sees her tasks + 'both'; other helpers see only their assigned tasks
+  // Member: Siobhan sees her tasks + 'both'; everyone else sees all tasks
   const { searchParams } = new URL(req.url)
   const wantCompleted = searchParams.get('completed') === '1'
   const wantBlocked = searchParams.get('blocked') === '1'
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   const query = supabase.from('tasks').select('*')
   const { data: all, error } = await (memberId === 'siobhan'
     ? query.or('assigned_to.ilike.%siobhan%,assigned_to.eq.both')
-    : query.ilike('assigned_to', `%${memberId}%`)
+    : query
   )
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
