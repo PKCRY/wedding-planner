@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
     supabase.from('events').select('*').order('date'),
   ])
 
-  const tasks: Task[] = tasksRes.data ?? []
+  const tasks: Task[] = (tasksRes.data ?? []).filter(t => t.due_date)
   const events: Event[] = eventsRes.data ?? []
 
   const vevents = [

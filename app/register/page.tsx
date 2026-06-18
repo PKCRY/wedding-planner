@@ -15,21 +15,26 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
 
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
 
-    const data = await res.json()
-    setLoading(false)
+      const data = await res.json()
 
-    if (!res.ok) {
-      setError(data.error || 'Something went wrong')
-      return
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong')
+        return
+      }
+
+      router.push('/her-dashboard')
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    router.push('/her-dashboard')
   }
 
   return (

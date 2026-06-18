@@ -35,6 +35,10 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
   blocked:     { bg: '#fdecea', color: '#c0607a' },
 }
 
+const PRIORITY_LABEL: Record<string, string> = {
+  high: 'High', medium: 'Medium', low: 'Low',
+}
+
 export default function SharedTaskPage() {
   const { token } = useParams<{ token: string }>()
 
@@ -43,20 +47,13 @@ export default function SharedTaskPage() {
   const [invalid, setInvalid] = useState(false)
 
   const [name, setName] = useState('')
-  const [message, setMessage] = useState('')
-  const [sending, setSending] = useState(false)
-  const [sendError, setSendError] = useState('')
-
   const [selectedStatus, setSelectedStatus] = useState<TaskStatus | ''>('')
-  const [updatingStatus, setUpdatingStatus] = useState(false)
-  const [showStatusUpdate, setShowStatusUpdate] = useState(false)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const saved = localStorage.getItem('share_name')
-    if (saved) setName(saved)
-  }, [])
 
   useEffect(() => {
     fetch(`/api/task-share/${token}`)
@@ -68,6 +65,7 @@ export default function SharedTaskPage() {
         if (data) {
           setTask(data)
           setSelectedStatus(data.status)
+          setName(data.responsible_party || '')
         }
       })
       .finally(() => setLoading(false))
@@ -77,40 +75,33 @@ export default function SharedTaskPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [task?.task_comments?.length])
 
-  async function sendMessage(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !message.trim()) return
-    setSending(true)
-    setSendError('')
-    localStorage.setItem('share_name', name.trim())
-    const res = await fetch(`/api/task-share/${token}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ responsible_party: name.trim(), comment: message.trim() }),
-    })
-    if (res.ok) {
-      setTask(await res.json())
-      setMessage('')
-    } else {
-      setSendError('Could not send — try again.')
-    }
-    setSending(false)
-  }
+    if (!name.trim()) return
+    setSubmitting(true)
+    setSubmitError('')
 
-  async function updateStatus() {
-    if (!name.trim() || !selectedStatus) return
-    setUpdatingStatus(true)
-    localStorage.setItem('share_name', name.trim())
+    const statusToSend = selectedStatus !== task?.status ? selectedStatus : undefined
     const res = await fetch(`/api/task-share/${token}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ responsible_party: name.trim(), status: selectedStatus }),
+      body: JSON.stringify({
+        responsible_party: name.trim(),
+        status: statusToSend || undefined,
+        comment: note.trim() || undefined,
+      }),
     })
+
     if (res.ok) {
-      setTask(await res.json())
-      setShowStatusUpdate(false)
+      const updated = await res.json()
+      setTask(updated)
+      setSelectedStatus(updated.status)
+      setNote('')
+      setSubmitted(true)
+    } else {
+      setSubmitError('Could not save — please try again.')
     }
-    setUpdatingStatus(false)
+    setSubmitting(false)
   }
 
   const green = '#2d4a30'
@@ -137,13 +128,14 @@ export default function SharedTaskPage() {
 
   const st = STATUS_STYLE[task.status] ?? STATUS_STYLE.pending
   const comments = task.task_comments ?? []
+  const canSubmit = name.trim().length > 0
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#f4f8f4' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#f4f8f4' }}>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white px-4 py-3 flex items-center justify-between" style={{ borderBottom: border }}>
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#d4849a' }}>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-base" style={{ backgroundColor: '#d4849a' }}>
             💍
           </div>
           <div className="min-w-0">
@@ -151,105 +143,176 @@ export default function SharedTaskPage() {
             <p className="text-xs" style={{ color: muted }}>Nick & Siobhan's Wedding</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowStatusUpdate(s => !s)}
+        <span
           className="text-xs font-medium px-3 py-1.5 rounded-full shrink-0 ml-2"
           style={{ backgroundColor: st.bg, color: st.color }}
         >
           {STATUS_LABEL[task.status]}
-        </button>
+        </span>
       </div>
 
-      <div className="max-w-lg mx-auto w-full px-4 flex flex-col flex-1">
+      <div className="max-w-lg mx-auto w-full px-4 pb-10 space-y-4 pt-4">
 
         {/* Note from sender */}
         {task.share_note && (
-          <div className="rounded-2xl px-4 py-3.5 mt-4" style={{ backgroundColor: '#fff8e6', border: '1px solid #e8d8a0' }}>
+          <div className="rounded-2xl px-4 py-3.5" style={{ backgroundColor: '#fff8e6', border: '1px solid #e8d8a0' }}>
             <p className="text-xs font-semibold mb-1" style={{ color: '#b08020' }}>Message from Nick & Siobhan 💍</p>
             <p className="text-sm leading-relaxed" style={{ color: '#7a6010' }}>{task.share_note}</p>
           </div>
         )}
 
-        {/* Status update panel */}
-        {showStatusUpdate && (
-          <div className="bg-white rounded-2xl shadow-sm mt-4 overflow-hidden" style={{ border }}>
-            <div className="px-4 pt-4 pb-4 space-y-3">
-              <p className="text-sm font-semibold" style={{ color: green }}>Update status</p>
-              {!name.trim() && (
-                <input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Your name *"
-                  className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-                  style={{ border: '1px solid #b8d0ba', color: green }}
-                />
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(STATUS_LABEL) as TaskStatus[]).map(s => {
-                  const isCurrent = s === task.status
-                  const isSelected = s === selectedStatus
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSelectedStatus(s)}
-                      className="rounded-xl px-3 py-3 text-sm font-medium text-left transition-colors relative"
-                      style={{
-                        backgroundColor: isSelected ? STATUS_STYLE[s].bg : '#f8faf8',
-                        color: isSelected ? STATUS_STYLE[s].color : muted,
-                        border: isSelected ? `2px solid ${STATUS_STYLE[s].color}` : '2px solid transparent',
-                      }}
-                    >
-                      {STATUS_LABEL[s]}
-                      {isCurrent && (
-                        <span className="absolute top-1.5 right-2 font-normal" style={{ color: STATUS_STYLE[s].color, opacity: 0.7, fontSize: 10 }}>
-                          current
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-              <button
-                onClick={updateStatus}
-                disabled={updatingStatus || !name.trim() || selectedStatus === task.status}
-                className="w-full font-medium rounded-xl text-white"
-                style={{ backgroundColor: '#7a9e7e', opacity: updatingStatus || !name.trim() || selectedStatus === task.status ? 0.5 : 1, minHeight: 48 }}
-              >
-                {updatingStatus ? 'Saving…' : 'Update status'}
-              </button>
-            </div>
+        {/* Full task details */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border }}>
+          <div className="px-4 pt-4 pb-1">
+            <h1 className="text-lg font-semibold leading-snug" style={{ color: green }}>{task.title}</h1>
           </div>
-        )}
-
-        {/* Task details */}
-        {(task.description || task.important_contacts || task.due_date) && (
-          <div className="bg-white rounded-2xl shadow-sm mt-4 overflow-hidden" style={{ border }}>
-            <div className="px-4 py-3 space-y-1.5">
-              {task.description && (
-                <p className="text-sm leading-relaxed" style={{ color: '#5a7d5e' }}>{task.description}</p>
+          <div className="px-4 pb-4 pt-2 space-y-2">
+            {task.description && (
+              <p className="text-sm leading-relaxed" style={{ color: '#5a7d5e' }}>{task.description}</p>
+            )}
+            <div className="flex flex-wrap gap-x-5 gap-y-1.5 pt-1">
+              {task.category && (
+                <div className="text-sm">
+                  <span style={{ color: muted }}>Category </span>
+                  <span className="font-medium" style={{ color: green }}>{task.category}</span>
+                </div>
               )}
-              {task.important_contacts && (
-                <div className="flex gap-2 text-sm">
-                  <span className="shrink-0" style={{ color: muted }}>Contacts</span>
-                  <span className="font-medium" style={{ color: green }}>{task.important_contacts}</span>
+              {task.priority && (
+                <div className="text-sm">
+                  <span style={{ color: muted }}>Priority </span>
+                  <span className="font-medium" style={{ color: green }}>{PRIORITY_LABEL[task.priority] ?? task.priority}</span>
                 </div>
               )}
               {task.due_date && (
-                <div className="flex gap-2 text-sm">
-                  <span className="shrink-0" style={{ color: muted }}>Due</span>
+                <div className="text-sm">
+                  <span style={{ color: muted }}>Due </span>
                   <span className="font-medium" style={{ color: green }}>
-                    {new Date(task.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </span>
+                </div>
+              )}
+              {task.important_contacts && (
+                <div className="text-sm">
+                  <span style={{ color: muted }}>Contacts </span>
+                  <span className="font-medium" style={{ color: green }}>{task.important_contacts}</span>
+                </div>
+              )}
+              {task.responsible_party && (
+                <div className="text-sm">
+                  <span style={{ color: muted }}>Handling </span>
+                  <span className="font-medium" style={{ color: green }}>{task.responsible_party}</span>
                 </div>
               )}
             </div>
           </div>
+        </div>
+
+        {/* Claim + update form */}
+        {submitted ? (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border }}>
+            <div className="px-4 py-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✅</span>
+                <p className="text-sm font-semibold" style={{ color: green }}>Saved! Thanks, {name.trim()}.</p>
+              </div>
+              <button
+                onClick={() => setSubmitted(false)}
+                className="text-sm font-medium"
+                style={{ color: muted }}
+              >
+                Make another update
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border }}>
+            <div className="px-4 pt-4 pb-3 space-y-4">
+              <div>
+                <p className="text-sm font-semibold mb-0.5" style={{ color: green }}>Claim this task</p>
+                <p className="text-xs" style={{ color: muted }}>Enter your name, update the status, and leave a note if needed.</p>
+              </div>
+
+              {/* Name */}
+              <div>
+                <p className="text-xs mb-2" style={{ color: muted }}>
+                  Your name <span style={{ color: '#c0607a' }}>*</span>
+                </p>
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Mum, Aiden…"
+                  required
+                  className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
+                  style={{ border: `1px solid ${name.trim() ? '#7a9e7e' : '#b8d0ba'}`, color: green }}
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <p className="text-xs mb-2" style={{ color: muted }}>Status</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.keys(STATUS_LABEL) as TaskStatus[]).map(s => {
+                    const isCurrent = s === task.status
+                    const isSelected = s === selectedStatus
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSelectedStatus(s)}
+                        className="rounded-xl px-3 py-3 text-sm font-medium text-left transition-colors relative"
+                        style={{
+                          backgroundColor: isSelected ? STATUS_STYLE[s].bg : '#f8faf8',
+                          color: isSelected ? STATUS_STYLE[s].color : muted,
+                          border: isSelected ? `2px solid ${STATUS_STYLE[s].color}` : '2px solid transparent',
+                        }}
+                      >
+                        {STATUS_LABEL[s]}
+                        {isCurrent && (
+                          <span className="absolute top-1.5 right-2 font-normal" style={{ color: STATUS_STYLE[s].color, opacity: 0.7, fontSize: 10 }}>
+                            current
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Note */}
+              <div>
+                <p className="text-xs mb-2" style={{ color: muted }}>Note (optional)</p>
+                <textarea
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  placeholder="Any updates, questions, or context…"
+                  rows={3}
+                  className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"
+                  style={{ border: '1px solid #b8d0ba', color: green }}
+                />
+              </div>
+
+              {submitError && (
+                <p className="text-sm" style={{ color: '#c0607a' }}>{submitError}</p>
+              )}
+            </div>
+
+            <div className="px-4 pb-4">
+              <button
+                type="submit"
+                disabled={submitting || !canSubmit}
+                className="w-full font-medium rounded-xl text-white"
+                style={{ backgroundColor: '#d4849a', opacity: submitting || !canSubmit ? 0.5 : 1, minHeight: 52 }}
+              >
+                {submitting ? 'Saving…' : 'Claim & update'}
+              </button>
+            </div>
+          </form>
         )}
 
-        {/* Chat thread */}
+        {/* Chat history */}
         {comments.length > 0 && (
-          <div className="mt-4 space-y-2">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide px-1" style={{ color: muted }}>Messages</p>
             {comments.map((c, i) => (
               <div key={i} className="bg-white rounded-2xl px-4 py-3" style={{ border }}>
                 <div className="flex items-baseline gap-2 mb-0.5">
@@ -266,49 +329,6 @@ export default function SharedTaskPage() {
             <div ref={messagesEndRef} />
           </div>
         )}
-
-        {/* Message input */}
-        <form onSubmit={sendMessage} className="mt-4 pb-6 space-y-2">
-          {!name.trim() ? (
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Your name"
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none bg-white"
-              style={{ border, color: green }}
-            />
-          ) : (
-            <div className="flex items-center gap-2 px-1">
-              <span className="text-xs font-medium" style={{ color: green }}>{name.trim()}</span>
-              <button
-                type="button"
-                onClick={() => { setName(''); localStorage.removeItem('share_name') }}
-                className="text-xs"
-                style={{ color: muted }}
-              >
-                change
-              </button>
-            </div>
-          )}
-          <div className="flex gap-2">
-            <input
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              placeholder="Send a message…"
-              className="flex-1 rounded-xl px-4 py-3 text-sm focus:outline-none bg-white"
-              style={{ border, color: green }}
-            />
-            <button
-              type="submit"
-              disabled={sending || !name.trim() || !message.trim()}
-              className="rounded-xl px-4 text-white font-medium shrink-0"
-              style={{ backgroundColor: '#d4849a', opacity: sending || !name.trim() || !message.trim() ? 0.5 : 1, minHeight: 48 }}
-            >
-              {sending ? '…' : 'Send'}
-            </button>
-          </div>
-          {sendError && <p className="text-sm" style={{ color: '#c0607a' }}>{sendError}</p>}
-        </form>
       </div>
     </div>
   )

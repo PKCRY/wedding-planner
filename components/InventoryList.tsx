@@ -121,8 +121,8 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function deleteItem(id: number) {
-    await fetch(`/api/inventory/${id}`, { method: 'DELETE' })
-    setItems(prev => prev.filter(i => i.id !== id))
+    const res = await fetch(`/api/inventory/${id}`, { method: 'DELETE' })
+    if (res.ok) setItems(prev => prev.filter(i => i.id !== id))
   }
 
   if (loading) {

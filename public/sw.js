@@ -45,10 +45,10 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     Promise.all([
       setBadge(0),
-      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
         for (const client of clientList) {
           if (client.url.startsWith(self.location.origin) && 'focus' in client) {
-            client.navigate(absoluteUrl)
+            await client.navigate(absoluteUrl)
             return client.focus()
           }
         }

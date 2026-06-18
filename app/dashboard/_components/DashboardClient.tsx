@@ -164,8 +164,8 @@ export default function DashboardClient({
   function bulkSetStatus(status: string) {
     const ids = [...selectedIds]
     if (!ids.length) return
-    const apply = () => {
-      ids.forEach(id => patchTask(id, { status }))
+    const apply = async () => {
+      await Promise.all(ids.map(id => patchTask(id, { status })))
       exitSelectMode()
     }
     if (status === 'done') {

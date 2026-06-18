@@ -14,10 +14,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   sort_order         integer      NOT NULL DEFAULT 999,
   due_date           date,
   completed_date     date,
+  completed_by       text         NOT NULL DEFAULT '',
   blocked_by         text         NOT NULL DEFAULT '',
   responsible_party  text         NOT NULL DEFAULT '',
   important_contacts text         NOT NULL DEFAULT '',
   task_comments      jsonb        NOT NULL DEFAULT '[]'::jsonb,
+  status_changed_at  timestamptz,
+  share_note         text         NOT NULL DEFAULT '',
+  share_token        text         UNIQUE,
   created_at         timestamptz  NOT NULL DEFAULT now(),
   created_by         text         NOT NULL DEFAULT 'import'
 );
