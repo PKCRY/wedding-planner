@@ -20,13 +20,14 @@ export async function POST(req: NextRequest) {
   const session = await getSession()
   if (!session.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { name, quantity, quantity_have, status, responsible_party, notes } = await req.json()
+  const { name, category, quantity, quantity_have, status, responsible_party, notes } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
   const { data, error } = await supabase
     .from('inventory')
     .insert({
       name: name.trim(),
+      category: category || '',
       quantity: quantity || '',
       quantity_have: quantity_have || '',
       status: status || 'needed',

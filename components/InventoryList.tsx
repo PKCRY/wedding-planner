@@ -54,6 +54,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [categoryFilter, setCategoryFilter] = useState('all')
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -84,18 +85,18 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const activeItems = items.filter(i => i.status !== 'acquired')
-    const acquired = items.filter(i => i.status === 'acquired')
-    const oldIndex = activeItems.findIndex(i => i.id === active.id)
-    const newIndex = activeItems.findIndex(i => i.id === over.id)
-    const reordered = arrayMove(activeItems, oldIndex, newIndex)
-    const updated = reordered.map((item, idx) => ({ ...item, sort_order: idx + 1 }))
-    setItems([...updated, ...acquired])
+    const pool = getFilteredActive()
+    const oldIndex = pool.findIndex(i => i.id === active.id)
+    const newIndex = pool.findIndex(i => i.id === over.id)
+    const reordered = arrayMove(pool, oldIndex, newIndex)
+    const withOrder = reordered.map((item, idx) => ({ ...item, sort_order: idx + 1 }))
+    const byId = new Map(withOrder.map(i => [i.id, i.sort_order]))
+    setItems(prev => prev.map(i => byId.has(i.id) ? { ...i, sort_order: byId.get(i.id)! } : i))
 
     fetch('/api/inventory/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated.map(i => ({ id: i.id, sort_order: i.sort_order }))),
+      body: JSON.stringify(withOrder.map(i => ({ id: i.id, sort_order: i.sort_order }))),
     }).catch(() => {})
   }
 
@@ -125,16 +126,32 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     if (res.ok) setItems(prev => prev.filter(i => i.id !== id))
   }
 
-  if (loading) {
-    return <div className="py-12 text-center text-sm" style={{ color: '#9db89f' }}>Loading inventory...</div>
+  // Derived state
+  const knownCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))).sort() as string[]
+  const allActive = items.filter(i => i.status !== 'acquired').sort((a, b) => a.sort_order - b.sort_order)
+  const acquired = items.filter(i => i.status === 'acquired')
+  const hasUncategorized = allActive.some(i => !i.category)
+
+  function getFilteredActive(): InventoryItem[] {
+    if (categoryFilter === 'all') return allActive
+    if (categoryFilter === '__none__') return allActive.filter(i => !i.category)
+    return allActive.filter(i => i.category === categoryFilter)
   }
 
-  const active = items.filter(i => i.status !== 'acquired')
-  const acquired = items.filter(i => i.status === 'acquired')
+  const filteredActive = getFilteredActive()
+  const canDrag = categoryFilter !== 'all'
+
   const counts = {
     needed: items.filter(i => i.status === 'needed').length,
     partial: items.filter(i => i.status === 'partial').length,
     acquired: items.filter(i => i.status === 'acquired').length,
+  }
+
+  // Pre-fill category when adding from a filtered view
+  const defaultCategory = categoryFilter === 'all' || categoryFilter === '__none__' ? '' : categoryFilter
+
+  if (loading) {
+    return <div className="py-12 text-center text-sm" style={{ color: '#9db89f' }}>Loading inventory...</div>
   }
 
   return (
@@ -145,12 +162,8 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         {(['needed', 'partial', 'acquired'] as const).map(s => (
           <div key={s} className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: STATUS_BAR[s] }} />
-            <span className="text-xs font-bold tabular-nums" style={{ color: STATUS_TEXT[s] }}>
-              {counts[s]}
-            </span>
-            <span className="text-xs" style={{ color: STATUS_TEXT[s] }}>
-              {STATUS_LABEL[s]}
-            </span>
+            <span className="text-xs font-bold tabular-nums" style={{ color: STATUS_TEXT[s] }}>{counts[s]}</span>
+            <span className="text-xs" style={{ color: STATUS_TEXT[s] }}>{STATUS_LABEL[s]}</span>
           </div>
         ))}
         <span className="text-xs font-semibold ml-auto tabular-nums" style={{ color: '#b8d0ba' }}>
@@ -164,30 +177,107 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         className="w-full rounded-2xl font-semibold text-sm"
         style={{ backgroundColor: '#e8f4e8', color: '#2d6a30', minHeight: 48 }}
       >
-        + Add Item
+        + Add Item{defaultCategory ? ` to ${defaultCategory}` : ''}
       </button>
 
-      {/* Active items */}
-      {active.length === 0 && (
-        <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
-          All items acquired!
+      {/* Category filter chips */}
+      {knownCategories.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          {(['all', ...knownCategories, ...(hasUncategorized ? ['__none__'] : [])] as string[]).map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className="shrink-0 text-sm font-medium rounded-full whitespace-nowrap transition-colors"
+              style={{
+                backgroundColor: categoryFilter === cat ? '#2d4a30' : '#e8f0e8',
+                color: categoryFilter === cat ? '#fff' : '#5a7d5e',
+                minHeight: 36,
+                padding: '0 14px',
+              }}
+            >
+              {cat === 'all' ? 'All' : cat === '__none__' ? 'Other' : cat}
+            </button>
+          ))}
         </div>
       )}
-      <div className="drag-list">
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={active.map(i => i.id)} strategy={verticalListSortingStrategy}>
-          {active.map(item => (
-            <SortableItemCard
-              key={item.id}
-              item={item}
-              isAdmin={isAdmin}
-              onCycle={() => cycleStatus(item)}
-              onEdit={() => setEditItem(item)}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
-      </div>
+
+      {/* Active items */}
+      {filteredActive.length === 0 && (
+        <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
+          {categoryFilter === 'all' ? 'All items acquired!' : 'No items in this category.'}
+        </div>
+      )}
+
+      {categoryFilter === 'all' && filteredActive.length > 0 ? (
+        /* Grouped view — no drag */
+        <div className="space-y-4">
+          {knownCategories.map(cat => {
+            const catItems = allActive.filter(i => i.category === cat)
+            if (catItems.length === 0) return null
+            return (
+              <div key={cat}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#7a9e7e' }}>{cat}</span>
+                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>{catItems.length}</span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+                </div>
+                <div className="space-y-2">
+                  {catItems.map(item => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      isAdmin={isAdmin}
+                      onCycle={() => cycleStatus(item)}
+                      onEdit={() => setEditItem(item)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {hasUncategorized && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Other</span>
+                <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0f4f0', color: '#b8d0ba' }}>
+                  {allActive.filter(i => !i.category).length}
+                </span>
+                <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+              </div>
+              <div className="space-y-2">
+                {allActive.filter(i => !i.category).map(item => (
+                  <ItemCard
+                    key={item.id}
+                    item={item}
+                    isAdmin={isAdmin}
+                    onCycle={() => cycleStatus(item)}
+                    onEdit={() => setEditItem(item)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : filteredActive.length > 0 ? (
+        /* Filtered + draggable view */
+        <div className="drag-list">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={filteredActive.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {filteredActive.map(item => (
+                  <SortableItemCard
+                    key={item.id}
+                    item={item}
+                    isAdmin={isAdmin}
+                    onCycle={() => cycleStatus(item)}
+                    onEdit={() => setEditItem(item)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      ) : null}
 
       {/* Acquired section */}
       {acquired.length > 0 && (
@@ -216,6 +306,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         <ItemModal
           item={editItem}
           isAdmin={isAdmin}
+          knownCategories={knownCategories}
           onClose={() => setEditItem(null)}
           onSave={async data => { await saveItem(editItem.id, data); setEditItem(null) }}
           onDelete={async () => { await deleteItem(editItem.id); setEditItem(null) }}
@@ -226,6 +317,8 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       {showAdd && (
         <ItemModal
           isAdmin={isAdmin}
+          knownCategories={knownCategories}
+          defaultCategory={defaultCategory}
           onClose={() => setShowAdd(false)}
           onSave={async data => { await saveItem(null, data); setShowAdd(false) }}
         />
@@ -262,12 +355,7 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
     >
       <div className="pl-4 pr-4 py-3.5 flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <p
-            className="font-semibold text-[15px] leading-snug"
-            style={{ color: '#2d4a30' }}
-          >
-            {item.name}
-          </p>
+          <p className="font-semibold text-[15px] leading-snug" style={{ color: '#2d4a30' }}>{item.name}</p>
           {(item.quantity || item.quantity_have || item.responsible_party) && (
             <p className="text-xs mt-0.5 break-words" style={{ color: '#9db89f' }}>
               {[
@@ -329,14 +417,17 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
   )
 }
 
-function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
+function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClose, onSave, onDelete }: {
   item?: InventoryItem
   isAdmin: boolean
+  knownCategories: string[]
+  defaultCategory?: string
   onClose: () => void
   onSave: (data: Partial<InventoryItem>) => Promise<void>
   onDelete?: () => Promise<void>
 }) {
   const [name, setName] = useState(item?.name ?? '')
+  const [category, setCategory] = useState(item?.category ?? defaultCategory)
   const [quantity, setQuantity] = useState(item?.quantity ?? '')
   const [quantityHave, setQuantityHave] = useState(item?.quantity_have ?? '')
   const [status, setStatus] = useState<InventoryItem['status']>(item?.status ?? 'needed')
@@ -351,7 +442,16 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
     if (!name.trim()) return
     setSaving(true)
     const parsed = sortOrder !== '' ? parseInt(sortOrder, 10) : undefined
-    await onSave({ name: name.trim(), quantity, quantity_have: quantityHave, status, responsible_party: responsibleParty, notes, ...(parsed != null && !isNaN(parsed) ? { sort_order: parsed } : {}) })
+    await onSave({
+      name: name.trim(),
+      category: category.trim(),
+      quantity,
+      quantity_have: quantityHave,
+      status,
+      responsible_party: responsibleParty,
+      notes,
+      ...(parsed != null && !isNaN(parsed) ? { sort_order: parsed } : {}),
+    })
     setSaving(false)
   }
 
@@ -385,6 +485,22 @@ function ItemModal({ item, isAdmin, onClose, onSave, onDelete }: {
             className="w-full rounded-2xl px-4 py-3 text-base font-semibold focus:outline-none"
             style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
           />
+
+          {/* Category */}
+          <div>
+            <input
+              list="inv-category-suggestions"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              placeholder="Category (e.g. Flowers, Catering…)"
+              className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+            />
+            <datalist id="inv-category-suggestions">
+              {knownCategories.map(c => <option key={c} value={c} />)}
+            </datalist>
+          </div>
+
           <div className="flex gap-2">
             <input
               value={quantityHave}

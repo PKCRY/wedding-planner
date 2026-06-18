@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   const { id } = await params
   const updates = await req.json()
 
-  const allowed = ['name', 'quantity', 'quantity_have', 'status', 'responsible_party', 'notes', 'sort_order'] as const
+  const allowed = ['name', 'category', 'quantity', 'quantity_have', 'status', 'responsible_party', 'notes', 'sort_order'] as const
   const patch: Record<string, unknown> = {}
   for (const f of allowed) {
     if (updates[f] !== undefined) patch[f] = updates[f]
