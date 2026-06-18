@@ -55,6 +55,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [search, setSearch] = useState('')
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -132,14 +133,27 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const acquired = items.filter(i => i.status === 'acquired')
   const hasUncategorized = allActive.some(i => !i.category)
 
+  function matchesSearch(item: InventoryItem): boolean {
+    if (!search.trim()) return true
+    const q = search.toLowerCase()
+    return (
+      item.name.toLowerCase().includes(q) ||
+      (item.notes ?? '').toLowerCase().includes(q) ||
+      (item.responsible_party ?? '').toLowerCase().includes(q) ||
+      (item.category ?? '').toLowerCase().includes(q)
+    )
+  }
+
   function getFilteredActive(): InventoryItem[] {
-    if (categoryFilter === 'all') return allActive
-    if (categoryFilter === '__none__') return allActive.filter(i => !i.category)
-    return allActive.filter(i => i.category === categoryFilter)
+    let pool = allActive
+    if (categoryFilter === '__none__') pool = pool.filter(i => !i.category)
+    else if (categoryFilter !== 'all') pool = pool.filter(i => i.category === categoryFilter)
+    return pool.filter(matchesSearch)
   }
 
   const filteredActive = getFilteredActive()
-  const canDrag = categoryFilter !== 'all'
+  const filteredAcquired = acquired.filter(matchesSearch)
+  const canDrag = categoryFilter !== 'all' && !search.trim()
 
   const counts = {
     needed: items.filter(i => i.status === 'needed').length,
@@ -171,14 +185,27 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         </span>
       </div>
 
-      {/* Add button */}
-      <button
-        onClick={() => setShowAdd(true)}
-        className="w-full rounded-2xl font-semibold text-sm"
-        style={{ backgroundColor: '#e8f4e8', color: '#2d6a30', minHeight: 48 }}
-      >
-        + Add Item{defaultCategory ? ` to ${defaultCategory}` : ''}
-      </button>
+      {/* Search bar */}
+      <div className="relative">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#9db89f' }}>
+          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+        </svg>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search items…"
+          className="w-full rounded-2xl pl-10 pr-10 text-sm focus:outline-none"
+          style={{ backgroundColor: '#f5f7f5', border: '1px solid #e4ede4', color: '#2d4a30', minHeight: 44 }}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+            style={{ backgroundColor: '#b8d0ba', color: '#fff' }}
+          >×</button>
+        )}
+      </div>
 
       {/* Category filter chips */}
       {knownCategories.length > 0 && (
@@ -201,10 +228,19 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
+      {/* Add button */}
+      <button
+        onClick={() => setShowAdd(true)}
+        className="w-full rounded-2xl font-semibold text-sm"
+        style={{ backgroundColor: '#e8f4e8', color: '#2d6a30', minHeight: 48 }}
+      >
+        + Add Item{defaultCategory ? ` to ${defaultCategory}` : ''}
+      </button>
+
       {/* Active items */}
       {filteredActive.length === 0 && (
         <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
-          {categoryFilter === 'all' ? 'All items acquired!' : 'No items in this category.'}
+          {search.trim() ? 'No items match your search.' : categoryFilter === 'all' ? 'All items acquired!' : 'No items in this category.'}
         </div>
       )}
 
@@ -212,7 +248,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         /* Grouped view — no drag */
         <div className="space-y-4">
           {knownCategories.map(cat => {
-            const catItems = allActive.filter(i => i.category === cat)
+            const catItems = allActive.filter(i => i.category === cat).filter(matchesSearch)
             if (catItems.length === 0) return null
             return (
               <div key={cat}>
@@ -235,28 +271,32 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
               </div>
             )
           })}
-          {hasUncategorized && (
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Other</span>
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0f4f0', color: '#b8d0ba' }}>
-                  {allActive.filter(i => !i.category).length}
-                </span>
-                <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+          {hasUncategorized && (() => {
+            const uncatItems = allActive.filter(i => !i.category).filter(matchesSearch)
+            if (uncatItems.length === 0) return null
+            return (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Other</span>
+                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0f4f0', color: '#b8d0ba' }}>
+                    {uncatItems.length}
+                  </span>
+                  <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
+                </div>
+                <div className="space-y-2">
+                  {uncatItems.map(item => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      isAdmin={isAdmin}
+                      onCycle={() => cycleStatus(item)}
+                      onEdit={() => setEditItem(item)}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2">
-                {allActive.filter(i => !i.category).map(item => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    isAdmin={isAdmin}
-                    onCycle={() => cycleStatus(item)}
-                    onEdit={() => setEditItem(item)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
       ) : filteredActive.length > 0 ? (
         /* Filtered + draggable view */
@@ -280,16 +320,16 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       ) : null}
 
       {/* Acquired section */}
-      {acquired.length > 0 && (
+      {filteredAcquired.length > 0 && (
         <>
           <div className="pt-4 pb-1 flex items-center gap-2">
             <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
             <span className="text-xs font-semibold uppercase tracking-wide px-2" style={{ color: '#b8d0ba' }}>
-              Done · {acquired.length}
+              Done · {filteredAcquired.length}
             </span>
             <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
           </div>
-          {acquired.map(item => (
+          {filteredAcquired.map(item => (
             <ItemCard
               key={item.id}
               item={item}
