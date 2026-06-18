@@ -228,14 +228,6 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {/* Add button */}
-      <button
-        onClick={() => setShowAdd(true)}
-        className="w-full rounded-2xl font-semibold text-sm"
-        style={{ backgroundColor: '#e8f4e8', color: '#2d6a30', minHeight: 48 }}
-      >
-        + Add Item{defaultCategory ? ` to ${defaultCategory}` : ''}
-      </button>
 
       {/* Active items */}
       {filteredActive.length === 0 && (
@@ -340,6 +332,15 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           ))}
         </>
       )}
+
+      {/* FAB */}
+      <button
+        onClick={() => setShowAdd(true)}
+        className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom"
+        style={{ backgroundColor: '#7a9e7e' }}
+      >
+        +
+      </button>
 
       {/* Edit modal */}
       {editItem && (
