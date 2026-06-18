@@ -123,6 +123,8 @@ export default function DashboardClient({
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [rankText, setRankText] = useState('')
+  const [groupByDate, setGroupByDate] = useState(false)
+  const [dueMonthText, setDueMonthText] = useState('')
   const [knownAssignees, setKnownAssignees] = useState<string[]>(['nick', 'siobhan'])
   const [, startTransition] = useTransition()
 
@@ -149,6 +151,7 @@ export default function DashboardClient({
     setSelectMode(false)
     setSelectedIds(new Set())
     setRankText('')
+    setDueMonthText('')
   }
 
   function toggleSelectAll(ids: number[]) {
@@ -182,6 +185,13 @@ export default function DashboardClient({
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(t => t.id)
     ids.forEach((id, i) => patchTask(id, { sort_order: rank + i }))
+    exitSelectMode()
+  }
+
+  function bulkSetDueMonth(month: string) {
+    if (!selectedIds.size || !month) return
+    const ids = [...selectedIds]
+    ids.forEach(id => patchTask(id, { due_date: `${month}-01` }))
     exitSelectMode()
   }
 
@@ -265,7 +275,7 @@ export default function DashboardClient({
 
   const sortedAll = [...tasks].sort((a, b) => a.sort_order - b.sort_order)
 
-  const canDragReorder = tab === 'tasks' && filter === 'all' && !searchLower && !selectMode
+  const canDragReorder = tab === 'tasks' && filter === 'all' && !searchLower && !selectMode && !groupByDate
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } }),
@@ -409,6 +419,24 @@ export default function DashboardClient({
                         {f === 'all' ? 'All' : f === user.id ? `${capitalize(f)} (me)` : capitalize(f)}
                       </button>
                     ))}
+                    <button
+                      onClick={() => setGroupByDate(g => !g)}
+                      className="shrink-0 text-sm font-medium rounded-full whitespace-nowrap transition-colors flex items-center gap-1"
+                      style={{
+                        backgroundColor: groupByDate ? '#5a7d5e' : '#e8f0e8',
+                        color: groupByDate ? '#fff' : '#5a7d5e',
+                        minHeight: 36,
+                        padding: '0 14px',
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                      By month
+                    </button>
                   </div>
                 </div>
 
@@ -451,6 +479,34 @@ export default function DashboardClient({
                         </div>
                       </SortableContext>
                     </DndContext>
+                  ) : groupByDate ? (
+                    <div className="space-y-4 pb-24 lg:pb-8">
+                      {groupTasksByMonth(displayed).map(group => (
+                        <div key={group.key}>
+                          <div className="flex items-center gap-2 mb-2 px-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9db89f' }}>{group.label}</p>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>{group.tasks.length}</span>
+                          </div>
+                          <div className="space-y-2">
+                            {group.tasks.map((task, i) => (
+                              <TaskCard
+                                key={task.id}
+                                task={task}
+                                pos={i + 1}
+                                onDetail={() => setDetailTask(task)}
+                                onEdit={() => setEditTask(task)}
+                                onDelete={() => deleteTask(task.id)}
+                                onPatch={u => patchTask(task.id, u)}
+                                onRequestConfirm={askConfirm}
+                                selectMode={tab === 'tasks' && selectMode}
+                                selected={selectedIds.has(task.id)}
+                                onToggleSelect={() => toggleSelect(task.id)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <div className="space-y-2 pb-24 lg:pb-8">
                       {displayed.map((task, i) => (
@@ -540,7 +596,7 @@ export default function DashboardClient({
             ))}
           </div>
           <p className="text-sm font-medium mb-2" style={{ color: '#2d4a30' }}>Set rank</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-3">
             <input
               type="number"
               value={rankText}
@@ -553,6 +609,22 @@ export default function DashboardClient({
               disabled={rankText.trim() === ''}
               className="text-sm font-medium rounded-xl px-4 shrink-0"
               style={{ backgroundColor: '#7a9e7e', color: '#fff', minHeight: 44, opacity: rankText.trim() === '' ? 0.5 : 1 }}>
+              Set
+            </button>
+          </div>
+          <p className="text-sm font-medium mb-2" style={{ color: '#2d4a30' }}>Set due month</p>
+          <div className="flex gap-2">
+            <input
+              type="month"
+              value={dueMonthText}
+              onChange={e => setDueMonthText(e.target.value)}
+              className="flex-1 rounded-xl px-3 focus:outline-none"
+              style={{ backgroundColor: '#e8f0e8', color: '#2d4a30', minHeight: 44 }}
+            />
+            <button onClick={() => bulkSetDueMonth(dueMonthText)}
+              disabled={!dueMonthText}
+              className="text-sm font-medium rounded-xl px-4 shrink-0"
+              style={{ backgroundColor: '#7a9e7e', color: '#fff', minHeight: 44, opacity: !dueMonthText ? 0.5 : 1 }}>
               Set
             </button>
           </div>
@@ -648,6 +720,25 @@ export default function DashboardClient({
       )}
     </div>
   )
+}
+
+function groupTasksByMonth(tasks: Task[]): { key: string; label: string; tasks: Task[] }[] {
+  const map = new Map<string, { key: string; label: string; tasks: Task[] }>()
+  for (const task of tasks) {
+    const key = task.due_date ? task.due_date.slice(0, 7) : 'none'
+    if (!map.has(key)) {
+      const label = key === 'none'
+        ? 'No due date'
+        : new Date(key + '-15').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      map.set(key, { key, label, tasks: [] })
+    }
+    map.get(key)!.tasks.push(task)
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.key === 'none') return 1
+    if (b.key === 'none') return -1
+    return a.key.localeCompare(b.key)
+  })
 }
 
 function ConfirmDialog({ message, onCancel, onConfirm }: {

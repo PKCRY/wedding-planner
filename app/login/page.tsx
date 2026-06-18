@@ -56,14 +56,15 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: '#5a7d5e' }}>
-              Username
+              Name
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              autoCapitalize="none"
-              autoComplete="username"
+              placeholder="Your name"
+              autoCapitalize="words"
+              autoComplete="name"
               autoCorrect="off"
               spellCheck={false}
               required
@@ -117,9 +118,9 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-6 text-xs text-center" style={{ color: '#9db89f' }}>
-          Not Nick or Siobhan?{' '}
+          First time here?{' '}
           <Link href="/register" style={{ color: '#7a9e7e', textDecoration: 'underline' }}>
-            Register here
+            Create an account
           </Link>
         </p>
 

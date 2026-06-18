@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
+import { supabase } from '@/lib/db'
+import { verifyPassword } from '@/lib/memberAuth'
 
-const USERS = {
+const HARDCODED_USERS = {
   nick: {
     id: 'nick',
     name: 'Nick',
@@ -18,15 +20,37 @@ const USERS = {
 
 export async function POST(req: NextRequest) {
   const { username, password } = await req.json()
+  if (!username || !password) {
+    return NextResponse.json({ error: 'Missing credentials' }, { status: 400 })
+  }
 
-  const user = USERS[username as keyof typeof USERS]
-  if (!user || !user.password || password !== user.password) {
+  const normalized = (username as string).trim().toLowerCase()
+
+  // Check hardcoded admin/Siobhan first
+  const hardcoded = HARDCODED_USERS[normalized as keyof typeof HARDCODED_USERS]
+  if (hardcoded) {
+    if (!hardcoded.password || password !== hardcoded.password) {
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    }
+    const session = await getSession()
+    session.user = { id: hardcoded.id, name: hardcoded.name, role: hardcoded.role }
+    await session.save()
+    return NextResponse.json({ user: { id: hardcoded.id, name: hardcoded.name, role: hardcoded.role } })
+  }
+
+  // Look up member by name (case-insensitive)
+  const { data: member } = await supabase
+    .from('member_users')
+    .select('id, name, salt, hash')
+    .ilike('name', username.trim())
+    .single()
+
+  if (!member || !verifyPassword(password, member.salt, member.hash)) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
   }
 
   const session = await getSession()
-  session.user = { id: user.id, name: user.name, role: user.role }
+  session.user = { id: member.id, name: member.name, role: 'member' }
   await session.save()
-
-  return NextResponse.json({ user: { id: user.id, name: user.name, role: user.role } })
+  return NextResponse.json({ user: { id: member.id, name: member.name, role: 'member' } })
 }

@@ -9,3 +9,5 @@ if (process.env.VAPID_EMAIL && process.env.VAPID_PUBLIC_KEY && process.env.VAPID
 }
 
 export { webpush }
+
+export const BLOCKED_USER_IDS = ['tim', 'tim-card']

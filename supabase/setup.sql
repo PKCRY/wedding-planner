@@ -95,3 +95,14 @@ CREATE TABLE IF NOT EXISTS inventory (
 ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ADD COLUMN IF NOT EXISTS quantity_have text NOT NULL DEFAULT '';
 ALTER TABLE inventory ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT '';
+
+-- ── Member accounts (password-protected registered users) ─────────────────
+
+CREATE TABLE IF NOT EXISTS member_users (
+  id         text         PRIMARY KEY,
+  name       text         NOT NULL,
+  salt       text         NOT NULL,
+  hash       text         NOT NULL,
+  created_at timestamptz  NOT NULL DEFAULT now()
+);
+ALTER TABLE member_users DISABLE ROW LEVEL SECURITY;

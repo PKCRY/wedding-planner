@@ -7,6 +7,7 @@ import Link from 'next/link'
 export default function RegisterPage() {
   const router = useRouter()
   const [name, setName] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -19,7 +20,7 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, password }),
       })
 
       const data = await res.json()
@@ -45,7 +46,7 @@ export default function RegisterPage() {
           <h1 className="text-4xl font-semibold mb-2" style={{ color: '#2d4a30', fontFamily: 'Georgia, serif' }}>
             Our Wedding
           </h1>
-          <p className="text-sm" style={{ color: '#9db89f' }}>Who are you?</p>
+          <p className="text-sm" style={{ color: '#9db89f' }}>Create your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -72,6 +73,30 @@ export default function RegisterPage() {
             />
           </div>
 
+          <div>
+            <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: '#5a7d5e' }}>
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Choose a password to log back in"
+              autoComplete="new-password"
+              required
+              className="w-full px-4 rounded-xl border focus:outline-none"
+              style={{
+                height: 52,
+                backgroundColor: '#fff',
+                borderColor: '#b8d0ba',
+                color: '#2d4a30',
+              }}
+            />
+            <p className="text-xs mt-1.5" style={{ color: '#9db89f' }}>
+              You'll use this to sign in next time
+            </p>
+          </div>
+
           {error && (
             <p className="text-sm text-center" style={{ color: '#c0607a' }}>{error}</p>
           )}
@@ -87,11 +112,18 @@ export default function RegisterPage() {
               letterSpacing: '0.05em',
             }}
           >
-            {loading ? 'Joining…' : 'Join'}
+            {loading ? 'Creating account…' : 'Create Account'}
           </button>
         </form>
 
         <p className="mt-6 text-xs text-center" style={{ color: '#9db89f' }}>
+          Already have an account?{' '}
+          <Link href="/login" style={{ color: '#7a9e7e', textDecoration: 'underline' }}>
+            Sign in
+          </Link>
+        </p>
+
+        <p className="mt-2 text-xs text-center" style={{ color: '#9db89f' }}>
           Nick or Siobhan?{' '}
           <Link href="/login" style={{ color: '#7a9e7e', textDecoration: 'underline' }}>
             Sign in instead

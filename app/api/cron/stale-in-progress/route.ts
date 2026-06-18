@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/db'
-import { webpush } from '@/lib/push'
+import { webpush, BLOCKED_USER_IDS } from '@/lib/push'
 import type { Task } from '@/lib/db'
 
 const STALE_HOURS = 24
@@ -24,7 +24,11 @@ export async function run() {
   const lines = stale.slice(0, 5).map(t => `• ${t.title} (${t.assigned_to})`)
   const body = `Still marked "in progress" — update the status if it's done or stuck:\n${lines.join('\n')}`
 
-  const { data: subs } = await supabase.from('push_subscriptions').select('subscription')
+  let subsQuery = supabase.from('push_subscriptions').select('subscription')
+  for (const blocked of BLOCKED_USER_IDS) {
+    subsQuery = subsQuery.neq('user_id', blocked)
+  }
+  const { data: subs } = await subsQuery
   if (!subs?.length) return { ok: true, sent: 0, stale: stale.length }
 
   const payload = JSON.stringify({
