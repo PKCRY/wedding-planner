@@ -338,7 +338,21 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
                     onClick={() => setEditItem(item)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#f5f7f5] transition-colors"
                   >
-                    <span className="flex-1 text-sm font-medium leading-snug" style={{ color: '#2d4a30' }}>{item.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-snug" style={{ color: '#2d4a30' }}>{item.name}</p>
+                      {(item.quantity || item.quantity_have) && (
+                        <p className="text-xs mt-0.5" style={{ color: '#9db89f' }}>
+                          {item.quantity_have && item.quantity
+                            ? `${item.quantity_have} of ${item.quantity}`
+                            : item.quantity_have
+                            ? `Have: ${item.quantity_have}`
+                            : `Need: ${item.quantity}`}
+                        </p>
+                      )}
+                      {item.notes && (
+                        <p className="text-xs mt-0.5 truncate" style={{ color: '#b8d0ba' }}>{item.notes}</p>
+                      )}
+                    </div>
                     <span
                       onClick={e => { e.stopPropagation(); cycleStatus(item) }}
                       className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer"
@@ -362,7 +376,18 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
                         onClick={() => setEditItem(item)}
                         className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-[#f5f7f5] transition-colors"
                       >
-                        <span className="flex-1 text-sm line-through" style={{ color: '#b8d0ba' }}>{item.name}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm line-through" style={{ color: '#b8d0ba' }}>{item.name}</p>
+                          {(item.quantity || item.quantity_have) && (
+                            <p className="text-xs mt-0.5" style={{ color: '#d8e8d8' }}>
+                              {item.quantity_have && item.quantity
+                                ? `${item.quantity_have} of ${item.quantity}`
+                                : item.quantity_have
+                                ? `Have: ${item.quantity_have}`
+                                : `Need: ${item.quantity}`}
+                            </p>
+                          )}
+                        </div>
                         <span
                           onClick={e => { e.stopPropagation(); cycleStatus(item) }}
                           className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer"
@@ -689,6 +714,13 @@ function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClo
   )
 }
 
+const SUGGESTED_CATEGORIES = [
+  'Flowers', 'Decorations', 'Catering', 'Drinks', 'Clothing',
+  'Photography', 'Videography', 'Stationery', 'Entertainment',
+  'Beauty & Hair', 'Favours', 'Transport', 'Venue', 'Accommodation',
+  'Jewellery', 'Cake', 'Gifts', 'Lighting',
+]
+
 function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
   categories: string[]
   value: string
@@ -698,6 +730,8 @@ function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
   const [showNewInput, setShowNewInput] = useState(false)
   const [newCatText, setNewCatText] = useState('')
   const newInputRef = useRef<HTMLInputElement>(null)
+
+  const suggestions = SUGGESTED_CATEGORIES.filter(s => !categories.includes(s))
 
   function handleAdd() {
     const trimmed = newCatText.trim()
@@ -721,6 +755,26 @@ function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
         </div>
 
         <div className="overflow-y-auto flex-1">
+          {/* Suggested categories (only ones not already created) */}
+          {suggestions.length > 0 && (
+            <div className="px-4 pt-2 pb-3" style={{ borderBottom: '1px solid #f0f4f0' }}>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Suggestions</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onSelect(s)}
+                    className="text-sm font-medium rounded-full px-3 py-1 transition-colors"
+                    style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Clear option */}
           {value && (
             <button
