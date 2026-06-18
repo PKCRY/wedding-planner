@@ -4,7 +4,7 @@ import { supabase } from '@/lib/db'
 
 type Context = { params: Promise<{ id: string }> }
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://nick-and-siobhan-wedding.vercel.app'
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://wedding-planner-one-sage.vercel.app'
 
 export async function GET(_req: NextRequest, { params }: Context) {
   const session = await getSession()
