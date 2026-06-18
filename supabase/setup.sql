@@ -96,6 +96,18 @@ ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ADD COLUMN IF NOT EXISTS quantity_have text NOT NULL DEFAULT '';
 ALTER TABLE inventory ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT '';
 
+-- ── Categories (persisted independently of tasks/inventory) ───────────────
+
+CREATE TABLE IF NOT EXISTS categories (
+  id         bigserial    PRIMARY KEY,
+  name       text         NOT NULL,
+  context    text         NOT NULL DEFAULT 'task',
+  sort_order integer      NOT NULL DEFAULT 999,
+  created_at timestamptz  NOT NULL DEFAULT now(),
+  UNIQUE(name, context)
+);
+ALTER TABLE categories DISABLE ROW LEVEL SECURITY;
+
 -- ── Member accounts (password-protected registered users) ─────────────────
 
 CREATE TABLE IF NOT EXISTS member_users (

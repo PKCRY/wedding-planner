@@ -51,6 +51,7 @@ const NEXT_STATUS: Record<string, InventoryItem['status']> = {
 
 export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const [items, setItems] = useState<InventoryItem[]>([])
+  const [dbCategories, setDbCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [showAdd, setShowAdd] = useState(false)
@@ -65,9 +66,24 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => { load() }, [])
 
   async function load() {
-    const res = await fetch('/api/inventory')
-    if (res.ok) setItems(await res.json() as InventoryItem[])
+    const [itemsRes, catsRes] = await Promise.all([
+      fetch('/api/inventory'),
+      fetch('/api/categories?context=inventory'),
+    ])
+    if (itemsRes.ok) setItems(await itemsRes.json() as InventoryItem[])
+    if (catsRes.ok) setDbCategories(await catsRes.json() as string[])
     setLoading(false)
+  }
+
+  async function addInventoryCategory(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setDbCategories(prev => Array.from(new Set([...prev, trimmed])).sort())
+    fetch('/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed, context: 'inventory' }),
+    }).catch(() => {})
   }
 
   async function cycleStatus(item: InventoryItem) {
@@ -128,7 +144,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   }
 
   // Derived state
-  const knownCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))).sort() as string[]
+  const knownCategories = Array.from(new Set([...dbCategories, ...items.map(i => i.category).filter(Boolean)])).sort() as string[]
   const allActive = items.filter(i => i.status !== 'acquired').sort((a, b) => a.sort_order - b.sort_order)
   const acquired = items.filter(i => i.status === 'acquired')
   const hasUncategorized = allActive.some(i => !i.category)
@@ -425,6 +441,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           item={editItem}
           isAdmin={isAdmin}
           knownCategories={knownCategories}
+          onAddCategory={addInventoryCategory}
           onClose={() => setEditItem(null)}
           onSave={async data => { await saveItem(editItem.id, data); setEditItem(null) }}
           onDelete={async () => { await deleteItem(editItem.id); setEditItem(null) }}
@@ -436,6 +453,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         <ItemModal
           isAdmin={isAdmin}
           knownCategories={knownCategories}
+          onAddCategory={addInventoryCategory}
           defaultCategory={defaultCategory}
           onClose={() => setShowAdd(false)}
           onSave={async data => { await saveItem(null, data); setShowAdd(false) }}
@@ -530,7 +548,7 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
   )
 }
 
-function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClose, onSave, onDelete }: {
+function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClose, onSave, onDelete, onAddCategory }: {
   item?: InventoryItem
   isAdmin: boolean
   knownCategories: string[]
@@ -538,6 +556,7 @@ function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClo
   onClose: () => void
   onSave: (data: Partial<InventoryItem>) => Promise<void>
   onDelete?: () => Promise<void>
+  onAddCategory?: (name: string) => void
 }) {
   const [name, setName] = useState(item?.name ?? '')
   const [category, setCategory] = useState(item?.category ?? defaultCategory)
@@ -708,6 +727,7 @@ function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClo
           value={category}
           onSelect={cat => { setCategory(cat); setCategorySheetOpen(false) }}
           onClose={() => setCategorySheetOpen(false)}
+          onAddCategory={onAddCategory}
         />
       )}
     </div>
@@ -721,11 +741,12 @@ const SUGGESTED_CATEGORIES = [
   'Jewellery', 'Cake', 'Gifts', 'Lighting',
 ]
 
-function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
+function CategoryPickerSheet({ categories, value, onSelect, onClose, onAddCategory }: {
   categories: string[]
   value: string
   onSelect: (cat: string) => void
   onClose: () => void
+  onAddCategory?: (name: string) => void
 }) {
   const [showNewInput, setShowNewInput] = useState(false)
   const [newCatText, setNewCatText] = useState('')
@@ -736,6 +757,7 @@ function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
   function handleAdd() {
     const trimmed = newCatText.trim()
     if (!trimmed) return
+    onAddCategory?.(trimmed)
     onSelect(trimmed)
   }
 

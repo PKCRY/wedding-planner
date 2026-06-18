@@ -126,12 +126,14 @@ export default function DashboardClient({
   const [groupByDate, setGroupByDate] = useState(false)
   const [dueMonthText, setDueMonthText] = useState('')
   const [knownAssignees, setKnownAssignees] = useState<string[]>(['nick', 'siobhan'])
+  const [dbCategories, setDbCategories] = useState<string[]>([])
   const [, startTransition] = useTransition()
 
   useEffect(() => {
     fetch('/api/assignees').then(r => r.ok ? r.json() : null).then(names => {
       if (names) setKnownAssignees(names)
     })
+    fetch('/api/categories?context=task').then(r => r.ok ? r.json() : []).then(setDbCategories)
   }, [])
 
   function askConfirm(message: string, onConfirm: () => void) {
@@ -201,6 +203,17 @@ export default function DashboardClient({
     router.push('/login')
   }
 
+  async function addTaskCategory(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setDbCategories(prev => Array.from(new Set([...prev, trimmed])).sort())
+    fetch('/api/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed, context: 'task' }),
+    }).catch(() => {})
+  }
+
   async function refreshTasks(f: Filter) {
     const res = await fetch(`/api/tasks?filter=${f}`)
     if (res.ok) setTasks(await res.json())
@@ -247,7 +260,7 @@ export default function DashboardClient({
     setEvents(prev => prev.filter(e => e.id !== id))
   }
 
-  const knownCategories = Array.from(new Set(tasks.map(t => t.category).filter(Boolean))) as string[]
+  const knownCategories = Array.from(new Set([...dbCategories, ...tasks.map(t => t.category).filter(Boolean)])).sort() as string[]
   const filtered = filter === 'all' ? tasks : tasks.filter(t => hasAssignee(t.assigned_to, filter))
   const reviewTasks = tasks.filter(t => t.created_by === 'siobhan' && t.status !== 'done')
   const searchLower = searchText.trim().toLowerCase()
@@ -644,6 +657,7 @@ export default function DashboardClient({
         <TaskModal
           knownAssignees={knownAssignees}
           categories={knownCategories}
+          onAddCategory={addTaskCategory}
           onClose={() => setShowCreate(false)}
           onSave={async data => {
             const res = await fetch('/api/tasks', {
@@ -690,6 +704,7 @@ export default function DashboardClient({
         <TaskModal
           knownAssignees={knownAssignees}
           categories={knownCategories}
+          onAddCategory={addTaskCategory}
           task={editTask}
           onClose={() => setEditTask(null)}
           onSave={async data => {
@@ -1278,13 +1293,14 @@ type TaskFormData = {
   blocked_by: string; responsible_party: string; important_contacts: string
 }
 
-function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddComment }: {
+function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddComment, onAddCategory }: {
   task?: Task
   knownAssignees: string[]
   categories: string[]
   onClose: () => void
   onSave: (data: TaskFormData) => Promise<boolean | void>
   onAddComment?: (text: string) => Promise<void>
+  onAddCategory?: (name: string) => void
 }) {
   const [form, setForm] = useState<TaskFormData>({
     title: task?.title ?? '',
@@ -1485,17 +1501,19 @@ function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddCom
           value={form.category}
           onSelect={cat => setForm({ ...form, category: cat })}
           onClose={() => setCategorySheetOpen(false)}
+          onAddCategory={onAddCategory}
         />
       )}
     </>
   )
 }
 
-function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
+function CategoryPickerSheet({ categories, value, onSelect, onClose, onAddCategory }: {
   categories: string[]
   value: string
   onSelect: (cat: string) => void
   onClose: () => void
+  onAddCategory?: (name: string) => void
 }) {
   const [showNewInput, setShowNewInput] = useState(false)
   const [newCatText, setNewCatText] = useState('')
@@ -1504,6 +1522,7 @@ function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
   function handleAdd() {
     const trimmed = newCatText.trim()
     if (!trimmed) return
+    onAddCategory?.(trimmed)
     onSelect(trimmed)
     onClose()
   }
