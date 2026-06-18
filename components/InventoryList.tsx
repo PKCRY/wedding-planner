@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -436,6 +436,7 @@ function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClo
   const [sortOrder, setSortOrder] = useState<string>(item?.sort_order != null ? String(item.sort_order) : '')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -487,19 +488,17 @@ function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClo
           />
 
           {/* Category */}
-          <div>
-            <input
-              list="inv-category-suggestions"
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              placeholder="Category (e.g. Flowers, Catering…)"
-              className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none"
-              style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
-            />
-            <datalist id="inv-category-suggestions">
-              {knownCategories.map(c => <option key={c} value={c} />)}
-            </datalist>
-          </div>
+          <button
+            type="button"
+            onClick={() => setCategorySheetOpen(true)}
+            className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between focus:outline-none text-sm"
+            style={{ border: '1px solid #d8e8d8', color: category ? '#2d4a30' : '#9db89f', backgroundColor: '#f5f7f5' }}
+          >
+            <span>{category || 'Select or create category…'}</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f', flexShrink: 0 }}>
+              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
 
           <div className="flex gap-2">
             <input
@@ -588,6 +587,126 @@ function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClo
             )
           )}
         </form>
+      </div>
+
+      {categorySheetOpen && (
+        <CategoryPickerSheet
+          categories={knownCategories}
+          value={category}
+          onSelect={cat => { setCategory(cat); setCategorySheetOpen(false) }}
+          onClose={() => setCategorySheetOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
+  categories: string[]
+  value: string
+  onSelect: (cat: string) => void
+  onClose: () => void
+}) {
+  const [showNewInput, setShowNewInput] = useState(false)
+  const [newCatText, setNewCatText] = useState('')
+  const newInputRef = useRef<HTMLInputElement>(null)
+
+  function handleAdd() {
+    const trimmed = newCatText.trim()
+    if (!trimmed) return
+    onSelect(trimmed)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-end justify-center z-[60]"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white rounded-t-3xl w-full max-w-lg shadow-2xl flex flex-col" style={{ maxHeight: '70vh' }}>
+        <div className="flex justify-center pt-2.5 pb-1 shrink-0">
+          <div className="w-9 h-1.5 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
+        </div>
+        <div className="flex items-center justify-between px-4 pb-3 shrink-0">
+          <h3 className="font-semibold text-base" style={{ color: '#2d4a30' }}>Category</h3>
+          <button onClick={onClose} className="w-11 h-11 flex items-center justify-center rounded-full text-xl"
+            style={{ color: '#9db89f', backgroundColor: '#f0f4f0' }}>×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {/* Clear option */}
+          {value && (
+            <button
+              type="button"
+              onClick={() => onSelect('')}
+              className="w-full flex items-center justify-between px-5 text-sm"
+              style={{ minHeight: 52, color: '#c0607a', borderTop: '1px solid #f0f4f0' }}
+            >
+              <span>No category</span>
+            </button>
+          )}
+
+          {categories.map((cat, i) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => onSelect(cat)}
+              className="w-full flex items-center justify-between px-5 text-sm"
+              style={{
+                minHeight: 52,
+                color: value === cat ? '#7a9e7e' : '#2d4a30',
+                fontWeight: value === cat ? 600 : 400,
+                borderTop: '1px solid #f0f4f0',
+              }}
+            >
+              <span>{cat}</span>
+              {value === cat && (
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M3.75 9l3.75 3.75 6.75-7.5" stroke="#7a9e7e" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          ))}
+
+          <div style={{ borderTop: '1px solid #d8e8d8' }}>
+            {showNewInput ? (
+              <div className="flex gap-2 px-4 py-3">
+                <input
+                  ref={newInputRef}
+                  autoFocus
+                  value={newCatText}
+                  onChange={e => setNewCatText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                  placeholder="Category name"
+                  className="flex-1 rounded-xl px-4 py-3 text-sm focus:outline-none"
+                  style={{ border: '1px solid #b8d0ba', color: '#2d4a30' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  disabled={!newCatText.trim()}
+                  className="rounded-xl px-5 text-sm font-medium text-white"
+                  style={{ backgroundColor: '#7a9e7e', opacity: newCatText.trim() ? 1 : 0.45, minHeight: 48 }}
+                >
+                  Add
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setShowNewInput(true); setTimeout(() => newInputRef.current?.focus(), 50) }}
+                className="w-full flex items-center gap-3 px-5 text-sm font-medium"
+                style={{ minHeight: 52, color: '#d4849a' }}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M9 3.75v10.5M3.75 9h10.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                </svg>
+                Create new category
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
       </div>
     </div>
   )
