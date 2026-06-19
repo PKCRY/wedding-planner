@@ -24,6 +24,7 @@ import Calendar from '@/components/Calendar'
 import PushManagerInline from '@/components/PushManagerInline'
 import InventoryList from '@/components/InventoryList'
 import NotificationCenter from '@/components/NotificationCenter'
+import InventoryReview from '@/components/InventoryReview'
 
 const STATUS_BAR: Record<string, string> = {
   done:        '#7a9e7e',  // green
@@ -578,21 +579,32 @@ export default function DashboardClient({
 
             {/* In Review — tasks Siobhan submitted */}
             {tab === 'review' && (
-              <div className="space-y-2 pb-24 lg:pb-8">
-                {reviewTasks.length === 0 ? (
-                  <div className="text-center py-16 text-sm" style={{ color: '#9db89f' }}>No tasks pending review</div>
-                ) : reviewTasks.sort((a, b) => a.sort_order - b.sort_order).map((task, i) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    pos={i + 1}
-                    onDetail={() => setDetailTask(task)}
-                    onEdit={() => setEditTask(task)}
-                    onDelete={() => deleteTask(task.id)}
-                    onPatch={(u) => patchTask(task.id, u)}
-                    onRequestConfirm={askConfirm}
-                  />
-                ))}
+              <div className="space-y-5 pb-24 lg:pb-8">
+                {/* Inventory review — progress + swipe queue */}
+                <InventoryReview />
+
+                {/* Task review — Siobhan's pending tasks */}
+                {reviewTasks.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold mb-2" style={{ color: '#2d4a30' }}>
+                      Tasks to review <span className="font-normal text-xs" style={{ color: '#9db89f' }}>({reviewTasks.length})</span>
+                    </p>
+                    <div className="space-y-2">
+                      {reviewTasks.sort((a, b) => a.sort_order - b.sort_order).map((task, i) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          pos={i + 1}
+                          onDetail={() => setDetailTask(task)}
+                          onEdit={() => setEditTask(task)}
+                          onDelete={() => deleteTask(task.id)}
+                          onPatch={(u) => patchTask(task.id, u)}
+                          onRequestConfirm={askConfirm}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
