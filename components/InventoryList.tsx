@@ -539,14 +539,14 @@ function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreat
               value={quantityHave}
               onChange={e => setQuantityHave(e.target.value)}
               placeholder="Have so far"
-              className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              className="flex-1 min-w-0 rounded-2xl px-4 py-3 text-sm focus:outline-none"
               style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
             />
             <input
               value={quantity}
               onChange={e => setQuantity(e.target.value)}
               placeholder="Total needed"
-              className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              className="flex-1 min-w-0 rounded-2xl px-4 py-3 text-sm focus:outline-none"
               style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
             />
           </div>
@@ -565,7 +565,7 @@ function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreat
               value={responsibleParty}
               onChange={e => setResponsibleParty(e.target.value)}
               placeholder="Responsible party (optional)"
-              className="flex-1 rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              className="flex-1 min-w-0 rounded-2xl px-4 py-3 text-sm focus:outline-none"
               style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
             />
             <input
