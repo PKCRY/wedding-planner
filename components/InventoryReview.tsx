@@ -138,7 +138,6 @@ export default function InventoryReview() {
           <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#e4ede4' }}>
             <div className="h-full rounded-full transition-all" style={{ width: `${catPct}%`, backgroundColor: catPct === 100 ? '#7a9e7e' : '#e6c84a' }} />
           </div>
-          <p className="text-xs mt-1" style={{ color: '#9db89f' }}>{catDone} of {catItems.length} acquired</p>
         </div>
         <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px solid #f0f4f0' }}>
           <span className="text-sm font-semibold" style={{ color: uncatCount > 0 ? '#c0607a' : '#7a9e7e' }}>Uncategorized</span>
