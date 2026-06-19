@@ -106,15 +106,7 @@ CREATE TABLE IF NOT EXISTS inventory_categories (
 );
 ALTER TABLE inventory_categories DISABLE ROW LEVEL SECURITY;
 
--- Seed categories from existing inventory items (idempotent)
-INSERT INTO inventory_categories (name)
-SELECT DISTINCT TRIM(category) FROM inventory WHERE TRIM(category) != ''
-ON CONFLICT (name) DO NOTHING;
-
 -- ── Task due date cleanup ─────────────────────────────────────────────────
-
--- Move all pre-June tasks to end of June
-UPDATE tasks SET due_date = '2026-06-30' WHERE due_date < '2026-06-01' AND due_date IS NOT NULL;
 
 -- ── Member accounts (password-protected registered users) ─────────────────
 

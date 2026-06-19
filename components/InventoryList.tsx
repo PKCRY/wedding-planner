@@ -76,23 +76,6 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     const loadedCats: InventoryCategory[] = catsRes.ok ? await catsRes.json() : []
     setItems(loadedItems)
     setCategories(loadedCats)
-
-    // Auto-seed any item categories not yet in inventory_categories
-    const savedNames = new Set(loadedCats.map(c => c.name))
-    const missing = Array.from(new Set(loadedItems.map(i => i.category?.trim()).filter(Boolean)))
-      .filter(n => !savedNames.has(n))
-    await Promise.all(missing.map(async name => {
-      const res = await fetch('/api/inventory/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
-      if (res.ok) {
-        const cat = await res.json() as InventoryCategory
-        setCategories(prev => prev.some(c => c.name === cat.name) ? prev : [...prev, cat])
-      }
-    }))
-
     setLoading(false)
   }
 
@@ -194,10 +177,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     )
   }
 
-  // Merged category list: saved categories + any from items not already there
-  const savedCatNames = categories.map(c => c.name)
-  const itemCatNames = Array.from(new Set(items.map(i => i.category?.trim()).filter(Boolean))) as string[]
-  const allCategoryNames = Array.from(new Set([...savedCatNames, ...itemCatNames])).sort()
+  const allCategoryNames = categories.map(c => c.name).sort()
 
   const hasUncategorized = items.some(i => !i.category)
   const allCategoryKeys = [...allCategoryNames, ...(hasUncategorized ? ['__none__'] : [])]
