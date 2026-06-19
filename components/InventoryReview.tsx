@@ -109,16 +109,10 @@ export default function InventoryReview() {
   }
 
   // Category breakdown
-  const catNames = categories.map(c => c.name)
-  const catStats = catNames.map(name => {
-    const catItems = allItems.filter(i => i.category === name)
-    const done = catItems.filter(i => i.status === 'acquired').length
-    return { name, total: catItems.length, done }
-  }).filter(c => c.total > 0)
   const uncatCount = allItems.filter(i => !i.category?.trim()).length
-  const totalDone = allItems.filter(i => i.status === 'acquired').length
-  const totalItems = allItems.length
-  const overallPct = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0
+  const catItems = allItems.filter(i => i.category?.trim())
+  const catDone = catItems.filter(i => i.status === 'acquired').length
+  const catPct = catItems.length > 0 ? Math.round((catDone / catItems.length) * 100) : 0
 
   if (loading) return <div className="py-8 text-center text-sm" style={{ color: '#9db89f' }}>Loading inventory...</div>
 
@@ -134,36 +128,24 @@ export default function InventoryReview() {
   return (
     <div className="space-y-5 pb-24 lg:pb-8">
 
-      {/* Overall progress */}
-      <div className="rounded-2xl p-4" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>Overall progress</p>
-          <span className="text-sm font-bold tabular-nums" style={{ color: '#7a9e7e' }}>{overallPct}%</span>
+      {/* Progress */}
+      <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-semibold" style={{ color: '#2d4a30' }}>Categorized items</span>
+            <span className="text-sm font-bold tabular-nums" style={{ color: '#7a9e7e' }}>{catPct}%</span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#e4ede4' }}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${catPct}%`, backgroundColor: catPct === 100 ? '#7a9e7e' : '#e6c84a' }} />
+          </div>
+          <p className="text-xs mt-1" style={{ color: '#9db89f' }}>{catDone} of {catItems.length} acquired</p>
         </div>
-        <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#e4ede4' }}>
-          <div className="h-full rounded-full transition-all" style={{ width: `${overallPct}%`, backgroundColor: overallPct === 100 ? '#7a9e7e' : '#e6c84a' }} />
-        </div>
-        <div className="mt-3 space-y-1.5">
-          {catStats.map(({ name, total, done }) => {
-            const pct = total > 0 ? Math.round((done / total) * 100) : 0
-            return (
-              <div key={name}>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs" style={{ color: '#5a7d5e' }}>{name}</span>
-                  <span className="text-xs tabular-nums font-medium" style={{ color: '#9db89f' }}>{done}/{total}</span>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#e4ede4' }}>
-                  <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
-                </div>
-              </div>
-            )
-          })}
-          {uncatCount > 0 && (
-            <div className="flex items-center justify-between pt-0.5">
-              <span className="text-xs" style={{ color: '#c0607a' }}>Uncategorized</span>
-              <span className="text-xs font-bold tabular-nums px-2 py-0.5 rounded-full" style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>{uncatCount}</span>
-            </div>
-          )}
+        <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px solid #f0f4f0' }}>
+          <span className="text-sm font-semibold" style={{ color: uncatCount > 0 ? '#c0607a' : '#7a9e7e' }}>Uncategorized</span>
+          <span className="text-sm font-bold tabular-nums px-2.5 py-0.5 rounded-full" style={{
+            backgroundColor: uncatCount > 0 ? '#fce8ef' : '#e8f4e8',
+            color: uncatCount > 0 ? '#c0607a' : '#2d6a30',
+          }}>{uncatCount}</span>
         </div>
       </div>
 
