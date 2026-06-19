@@ -21,7 +21,7 @@ import { CSS } from '@dnd-kit/utilities'
 import type { Task, Event, TaskComment } from '@/lib/db'
 import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
-import PushManagerInline from '@/components/PushManagerInline'
+import NotificationSettings from '@/components/NotificationSettings'
 import InventoryList from '@/components/InventoryList'
 import NotificationCenter from '@/components/NotificationCenter'
 import InventoryReview from '@/components/InventoryReview'
@@ -1742,8 +1742,8 @@ function SettingsModal({ onClose, onLogout }: { onClose: () => void; onLogout: (
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <p className="text-sm font-medium mb-2" style={{ color: '#2d4a30' }}>Push Notifications</p>
-            <PushManagerInline />
+            <p className="text-sm font-medium mb-2" style={{ color: '#2d4a30' }}>Notifications</p>
+            <NotificationSettings />
           </div>
           <div style={{ borderTop: '1px solid #d8e8d8' }} className="pt-4">
             <button onClick={onLogout}

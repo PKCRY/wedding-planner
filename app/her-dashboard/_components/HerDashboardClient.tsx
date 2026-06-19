@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Task, Event, TaskComment } from '@/lib/db'
 import type { SessionUser } from '@/lib/session'
 import Calendar from '@/components/Calendar'
-import PushManagerInline from '@/components/PushManagerInline'
+import NotificationSettings from '@/components/NotificationSettings'
 import InventoryList from '@/components/InventoryList'
 import NotificationCenter from '@/components/NotificationCenter'
 import Timeline from '@/components/Timeline'
@@ -328,8 +328,8 @@ export default function HerDashboardClient({
         <BottomSheet onClose={() => setShowSettings(false)}>
           <div className="px-5 pb-6 space-y-5">
             <div>
-              <p className="text-sm font-semibold mb-3" style={{ color: '#2d4a30' }}>Push Notifications</p>
-              <PushManagerInline />
+              <p className="text-sm font-semibold mb-3" style={{ color: '#2d4a30' }}>Notifications</p>
+              <NotificationSettings />
             </div>
             <button onClick={logout}
               className="w-full text-sm font-semibold rounded-2xl"

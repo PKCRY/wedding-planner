@@ -64,9 +64,18 @@ function pick<T>(arr: T[]): T {
 
 const ALL_USERS = ['nick', 'siobhan']
 
+async function getDisabledUsers(): Promise<Set<string>> {
+  const { data } = await supabase
+    .from('notification_prefs')
+    .select('user_id')
+    .eq('enabled', false)
+  return new Set(data?.map(r => r.user_id) ?? [])
+}
+
 export async function sendPushToAll(
   payload: { title: string; body: string; url?: string; badge_count?: number },
-  excludeUserId?: string
+  excludeUserId?: string,
+  alsoExclude?: Set<string>
 ) {
   try {
     let query = supabase.from('push_subscriptions').select('subscription, user_id')
@@ -75,7 +84,16 @@ export async function sendPushToAll(
     if (!subs?.length) return
     const json = JSON.stringify({ url: '/', badge_count: 1, ...payload })
     await Promise.allSettled(
-      subs.map(({ subscription }) => webpush.sendNotification(subscription, json))
+      subs
+        .filter(s => !alsoExclude?.has(s.user_id))
+        .map(({ subscription, user_id }) =>
+          webpush.sendNotification(subscription, json).catch(async (err: { statusCode?: number }) => {
+            // Auto-remove expired/invalid push subscriptions
+            if (err?.statusCode === 410 || err?.statusCode === 404) {
+              await supabase.from('push_subscriptions').delete().eq('user_id', user_id)
+            }
+          })
+        )
     )
   } catch {
     // best-effort, never block the calling request
@@ -84,13 +102,15 @@ export async function sendPushToAll(
 
 // Sends a push notification AND saves it to the in-app notification center
 // for every user except excludeUserId (the actor who triggered the event).
+// Respects per-user notification_prefs — users who opted out are skipped.
 export async function notifyOthers(
   payload: { title: string; body: string; url?: string; badge_count?: number },
   excludeUserId?: string
 ) {
-  sendPushToAll(payload, excludeUserId)
   try {
-    const recipients = ALL_USERS.filter(u => u !== excludeUserId)
+    const disabled = await getDisabledUsers()
+    const recipients = ALL_USERS.filter(u => u !== excludeUserId && !disabled.has(u))
+    sendPushToAll(payload, excludeUserId, disabled)
     if (!recipients.length) return
     await supabase.from('notifications').insert(
       recipients.map(user_id => ({
