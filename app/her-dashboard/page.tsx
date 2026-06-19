@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getSession } from '@/lib/session'
+import { getSession, isAdmin } from '@/lib/session'
 import { supabase } from '@/lib/db'
 import type { Task, Event } from '@/lib/db'
 import HerDashboardClient from './_components/HerDashboardClient'
@@ -8,7 +8,7 @@ import Heartbeat from '@/components/Heartbeat'
 export default async function HerDashboardPage() {
   const session = await getSession()
   if (!session.user) redirect('/login')
-  if (session.user.role !== 'member') redirect('/dashboard')
+  if (isAdmin(session.user)) redirect('/dashboard')
 
   const memberId = session.user.id
   const taskQuery = memberId === 'siobhan'
