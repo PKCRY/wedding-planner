@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   }
 
   const session = await getSession()
-  session.user = { id: member.id, name: member.name, role: 'member' }
+  session.user = { id: member.id, name: member.name, role: 'admin' }
   await session.save()
-  return NextResponse.json({ user: { id: member.id, name: member.name, role: 'member' } })
+  return NextResponse.json({ user: { id: member.id, name: member.name, role: 'admin' } })
 }

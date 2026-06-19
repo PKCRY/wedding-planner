@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const session = await getSession()
-  session.user = { id, name, role: 'member' }
+  session.user = { id, name, role: 'admin' }
   await session.save()
 
-  return NextResponse.json({ user: { id, name, role: 'member' } })
+  return NextResponse.json({ user: { id, name, role: 'admin' } })
 }
