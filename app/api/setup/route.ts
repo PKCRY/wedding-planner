@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/session'
+import { getSession, isAdmin } from '@/lib/session'
 import { supabase } from '@/lib/db'
 
 // Verifies DB connectivity. Run the SQL in supabase/schema.sql in the Supabase SQL Editor first.
 export async function POST() {
   const session = await getSession()
-  if (!session.user || session.user.role !== 'admin') {
+  if (!session.user || !isAdmin(session.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

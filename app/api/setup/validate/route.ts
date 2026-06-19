@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/session'
+import { getSession, isAdmin } from '@/lib/session'
 import { supabase } from '@/lib/db'
 
 const TABLES = ['tasks', 'events', 'push_subscriptions', 'inventory'] as const
 
 export async function GET() {
   const session = await getSession()
-  if (!session.user || session.user.role !== 'admin') {
+  if (!session.user || !isAdmin(session.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

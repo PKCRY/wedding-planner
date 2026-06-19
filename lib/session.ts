@@ -26,3 +26,7 @@ export async function getSession() {
   const cookieStore = await cookies()
   return getIronSession<SessionData>(cookieStore, sessionOptions)
 }
+
+export function isAdmin(user: SessionUser): boolean {
+  return user.id !== 'siobhan'
+}

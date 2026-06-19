@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/session'
+import { getSession, isAdmin } from '@/lib/session'
 import { supabase, sortTasks } from '@/lib/db'
 import { webpush } from '@/lib/push'
 
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const session = await getSession()
   if (!session.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  if (session.user.role === 'admin') {
+  if (isAdmin(session.user)) {
     const { searchParams } = new URL(req.url)
     const filter = searchParams.get('filter')
 
@@ -69,9 +69,9 @@ export async function POST(req: NextRequest) {
     title: title.trim(),
     description: description || '',
     category: category || '',
-    assigned_to: session.user.role === 'admin' ? (assigned_to || 'both') : 'siobhan',
+    assigned_to: isAdmin(session.user) ? (assigned_to || 'both') : 'siobhan',
     priority: priority || 'medium',
-    sort_order: session.user.role === 'admin' ? (sort_order ?? 999) : 9999,
+    sort_order: isAdmin(session.user) ? (sort_order ?? 999) : 9999,
     due_date: due_date || null,
     blocked_by: blocked_by || '',
     responsible_party: responsible_party || '',
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Notify Nick when Siobhan adds a task
-  if (session.user.role !== 'admin') {
+  if (!isAdmin(session.user)) {
     try {
       const { data: nickSub } = await supabase
         .from('push_subscriptions').select('subscription').eq('user_id', 'nick').single()

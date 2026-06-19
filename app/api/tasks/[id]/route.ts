@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/session'
+import { getSession, isAdmin } from '@/lib/session'
 import { supabase } from '@/lib/db'
 import type { TaskComment } from '@/lib/db'
 import { notifyOthers, taskDonePayload, taskStartedPayload, taskMovedPayload, taskCommentPayload } from '@/lib/notifications'
@@ -17,7 +17,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   const { id } = await params
   const updates = await req.json()
 
-  if (session.user.role !== 'admin') {
+  if (!isAdmin(session.user)) {
     const patch: Record<string, unknown> = {}
 
     const memberFields = ['title', 'description', 'due_date',
@@ -137,7 +137,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
 
 export async function DELETE(_req: NextRequest, { params }: Context) {
   const session = await getSession()
-  if (!session.user || session.user.role !== 'admin') {
+  if (!session.user || !isAdmin(session.user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

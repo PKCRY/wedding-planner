@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/session'
+import { getSession, isAdmin } from '@/lib/session'
 import { supabase } from '@/lib/db'
 import { webpush, BLOCKED_USER_IDS } from '@/lib/push'
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
-  if (!session.user || session.user.role !== 'admin') {
+  if (!session.user || !isAdmin(session.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/session'
+import { getSession, isAdmin } from '@/lib/session'
 import { supabase } from '@/lib/db'
 import { generateSalt, hashPassword, nameToId } from '@/lib/memberAuth'
 
@@ -10,7 +10,7 @@ const PRESET_MEMBERS = [
 
 export async function POST(req: NextRequest) {
   const session = await getSession()
-  if (!session.user || session.user.role !== 'admin') {
+  if (!session.user || !isAdmin(session.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
