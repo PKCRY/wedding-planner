@@ -8,14 +8,20 @@ export default function RegisterPage() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    setLoading(true)
 
+    if (password !== confirm) {
+      setError('Passwords do not match')
+      return
+    }
+
+    setLoading(true)
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -52,24 +58,19 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: '#5a7d5e' }}>
-              Your name
+              Name
             </label>
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Mum, John, Aunty Claire…"
+              onChange={e => setName(e.target.value)}
+              placeholder="Your name"
               autoCapitalize="words"
               autoComplete="name"
               autoFocus
               required
               className="w-full px-4 rounded-xl border focus:outline-none"
-              style={{
-                height: 52,
-                backgroundColor: '#fff',
-                borderColor: '#b8d0ba',
-                color: '#2d4a30',
-              }}
+              style={{ height: 52, backgroundColor: '#fff', borderColor: '#b8d0ba', color: '#2d4a30' }}
             />
           </div>
 
@@ -80,21 +81,29 @@ export default function RegisterPage() {
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Choose a password to log back in"
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
               autoComplete="new-password"
               required
               className="w-full px-4 rounded-xl border focus:outline-none"
-              style={{
-                height: 52,
-                backgroundColor: '#fff',
-                borderColor: '#b8d0ba',
-                color: '#2d4a30',
-              }}
+              style={{ height: 52, backgroundColor: '#fff', borderColor: '#b8d0ba', color: '#2d4a30' }}
             />
-            <p className="text-xs mt-1.5" style={{ color: '#9db89f' }}>
-              You'll use this to sign in next time
-            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase tracking-widest mb-2" style={{ color: '#5a7d5e' }}>
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              placeholder="Confirm password"
+              autoComplete="new-password"
+              required
+              className="w-full px-4 rounded-xl border focus:outline-none"
+              style={{ height: 52, backgroundColor: '#fff', borderColor: '#b8d0ba', color: '#2d4a30' }}
+            />
           </div>
 
           {error && (
@@ -105,12 +114,7 @@ export default function RegisterPage() {
             type="submit"
             disabled={loading}
             className="w-full rounded-xl font-medium text-white"
-            style={{
-              height: 52,
-              backgroundColor: '#d4849a',
-              opacity: loading ? 0.6 : 1,
-              letterSpacing: '0.05em',
-            }}
+            style={{ height: 52, backgroundColor: '#d4849a', opacity: loading ? 0.6 : 1, letterSpacing: '0.05em' }}
           >
             {loading ? 'Creating account…' : 'Create Account'}
           </button>
@@ -120,13 +124,6 @@ export default function RegisterPage() {
           Already have an account?{' '}
           <Link href="/login" style={{ color: '#7a9e7e', textDecoration: 'underline' }}>
             Sign in
-          </Link>
-        </p>
-
-        <p className="mt-2 text-xs text-center" style={{ color: '#9db89f' }}>
-          Nick or Siobhan?{' '}
-          <Link href="/login" style={{ color: '#7a9e7e', textDecoration: 'underline' }}>
-            Sign in instead
           </Link>
         </p>
 

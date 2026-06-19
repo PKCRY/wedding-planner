@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -17,7 +17,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { InventoryItem } from '@/lib/db'
+import type { InventoryItem, InventoryCategory } from '@/lib/db'
 
 const STATUS_BAR: Record<string, string> = {
   needed:   '#d4849a',
@@ -51,11 +51,14 @@ const NEXT_STATUS: Record<string, InventoryItem['status']> = {
 
 export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const [items, setItems] = useState<InventoryItem[]>([])
+  const [categories, setCategories] = useState<InventoryCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [addDefaultCategory, setAddDefaultCategory] = useState('')
   const [search, setSearch] = useState('')
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
+  const [expandedDone, setExpandedDone] = useState<Set<string>>(new Set())
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -65,8 +68,31 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => { load() }, [])
 
   async function load() {
-    const res = await fetch('/api/inventory')
-    if (res.ok) setItems(await res.json() as InventoryItem[])
+    const [itemsRes, catsRes] = await Promise.all([
+      fetch('/api/inventory'),
+      fetch('/api/inventory/categories'),
+    ])
+    const loadedItems: InventoryItem[] = itemsRes.ok ? await itemsRes.json() : []
+    const loadedCats: InventoryCategory[] = catsRes.ok ? await catsRes.json() : []
+    setItems(loadedItems)
+    setCategories(loadedCats)
+
+    // Auto-seed any item categories not yet in inventory_categories
+    const savedNames = new Set(loadedCats.map(c => c.name))
+    const missing = Array.from(new Set(loadedItems.map(i => i.category?.trim()).filter(Boolean)))
+      .filter(n => !savedNames.has(n))
+    await Promise.all(missing.map(async name => {
+      const res = await fetch('/api/inventory/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (res.ok) {
+        const cat = await res.json() as InventoryCategory
+        setCategories(prev => prev.some(c => c.name === cat.name) ? prev : [...prev, cat])
+      }
+    }))
+
     setLoading(false)
   }
 
@@ -86,7 +112,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const pool = getFilteredActive()
+    const pool = items.filter(i => i.status !== 'acquired').sort((a, b) => a.sort_order - b.sort_order)
     const oldIndex = pool.findIndex(i => i.id === active.id)
     const newIndex = pool.findIndex(i => i.id === over.id)
     const reordered = arrayMove(pool, oldIndex, newIndex)
@@ -127,11 +153,35 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     if (res.ok) setItems(prev => prev.filter(i => i.id !== id))
   }
 
-  // Derived state
-  const knownCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))).sort() as string[]
-  const allActive = items.filter(i => i.status !== 'acquired').sort((a, b) => a.sort_order - b.sort_order)
-  const acquired = items.filter(i => i.status === 'acquired')
-  const hasUncategorized = allActive.some(i => !i.category)
+  async function createCategory(name: string) {
+    const res = await fetch('/api/inventory/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (res.ok) {
+      const cat = await res.json() as InventoryCategory
+      setCategories(prev => prev.some(c => c.name === cat.name) ? prev : [...prev, cat])
+    }
+  }
+
+  function toggleCategory(key: string) {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function toggleDone(key: string) {
+    setExpandedDone(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   function matchesSearch(item: InventoryItem): boolean {
     if (!search.trim()) return true
@@ -144,25 +194,23 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     )
   }
 
-  function getFilteredActive(): InventoryItem[] {
-    let pool = allActive
-    if (categoryFilter === '__none__') pool = pool.filter(i => !i.category)
-    else if (categoryFilter !== 'all') pool = pool.filter(i => i.category === categoryFilter)
-    return pool.filter(matchesSearch)
-  }
+  // Merged category list: saved categories + any from items not already there
+  const savedCatNames = categories.map(c => c.name)
+  const itemCatNames = Array.from(new Set(items.map(i => i.category?.trim()).filter(Boolean))) as string[]
+  const allCategoryNames = Array.from(new Set([...savedCatNames, ...itemCatNames])).sort()
 
-  const filteredActive = getFilteredActive()
-  const filteredAcquired = acquired.filter(matchesSearch)
-  const canDrag = categoryFilter !== 'all' && !search.trim()
+  const hasUncategorized = items.some(i => !i.category)
+  const allCategoryKeys = [...allCategoryNames, ...(hasUncategorized ? ['__none__'] : [])]
+
+  function getCatItems(cat: string) {
+    return items.filter(i => cat === '__none__' ? !i.category : i.category === cat)
+  }
 
   const counts = {
     needed: items.filter(i => i.status === 'needed').length,
     partial: items.filter(i => i.status === 'partial').length,
     acquired: items.filter(i => i.status === 'acquired').length,
   }
-
-  // Pre-fill category when adding from a filtered view
-  const defaultCategory = categoryFilter === 'all' || categoryFilter === '__none__' ? '' : categoryFilter
 
   if (loading) {
     return <div className="py-12 text-center text-sm" style={{ color: '#9db89f' }}>Loading inventory...</div>
@@ -207,204 +255,94 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      {/* ── MOBILE: category chips + list ── */}
-      <div className="lg:hidden space-y-3">
-        {knownCategories.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
-            {(['all', ...knownCategories, ...(hasUncategorized ? ['__none__'] : [])] as string[]).map(cat => (
-              <button
-                key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                className="shrink-0 text-sm font-medium rounded-full whitespace-nowrap transition-colors"
-                style={{
-                  backgroundColor: categoryFilter === cat ? '#2d4a30' : '#e8f0e8',
-                  color: categoryFilter === cat ? '#fff' : '#5a7d5e',
-                  minHeight: 36,
-                  padding: '0 14px',
-                }}
-              >
-                {cat === 'all' ? 'All' : cat === '__none__' ? 'Other' : cat}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {filteredActive.length === 0 && (
-          <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
-            {search.trim() ? 'No items match your search.' : categoryFilter === 'all' ? 'All items acquired!' : 'No items in this category.'}
-          </div>
-        )}
-
-        {categoryFilter === 'all' && filteredActive.length > 0 ? (
-          <div className="space-y-4">
-            {knownCategories.map(cat => {
-              const catItems = allActive.filter(i => i.category === cat).filter(matchesSearch)
-              if (catItems.length === 0) return null
-              return (
-                <div key={cat}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#7a9e7e' }}>{cat}</span>
-                    <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>{catItems.length}</span>
-                    <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
-                  </div>
-                  <div className="space-y-2">
-                    {catItems.map(item => (
-                      <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-            {hasUncategorized && (() => {
-              const uncatItems = allActive.filter(i => !i.category).filter(matchesSearch)
-              if (uncatItems.length === 0) return null
-              return (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Other</span>
-                    <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f0f4f0', color: '#b8d0ba' }}>
-                      {allActive.filter(i => !i.category).filter(matchesSearch).length}
-                    </span>
-                    <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
-                  </div>
-                  <div className="space-y-2">
-                    {uncatItems.map(item => (
-                      <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
-          </div>
-        ) : filteredActive.length > 0 ? (
-          <div className="drag-list">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={filteredActive.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {filteredActive.map(item => (
-                    <SortableItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          </div>
-        ) : null}
-
-        {filteredAcquired.length > 0 && (
-          <>
-            <div className="pt-4 pb-1 flex items-center gap-2">
-              <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
-              <span className="text-xs font-semibold uppercase tracking-wide px-2" style={{ color: '#b8d0ba' }}>Done · {filteredAcquired.length}</span>
-              <div className="flex-1 h-px" style={{ backgroundColor: '#e4ede4' }} />
-            </div>
-            {filteredAcquired.map(item => (
-              <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
-            ))}
-          </>
-        )}
-      </div>
-
-      {/* ── DESKTOP: category dashboard grid ── */}
-      <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 gap-4 pb-8">
-        {[...knownCategories, ...(hasUncategorized ? ['__none__'] : [])].map(cat => {
+      {/* ── Category accordion ── */}
+      <div className="space-y-2 pb-24 lg:pb-8">
+        {allCategoryKeys.map(cat => {
           const catLabel = cat === '__none__' ? 'Other' : cat
-          const catAll = cat === '__none__'
-            ? items.filter(i => !i.category)
-            : items.filter(i => i.category === cat)
-          const catVisible = catAll.filter(matchesSearch)
-          if (catVisible.length === 0) return null
-          const doneCount = catVisible.filter(i => i.status === 'acquired').length
-          const pct = catVisible.length > 0 ? Math.round((doneCount / catVisible.length) * 100) : 0
-          const activeVisible = catVisible.filter(i => i.status !== 'acquired')
-          const acquiredVisible = catVisible.filter(i => i.status === 'acquired')
+          const catItems = getCatItems(cat)
+          const activeItems = catItems.filter(i => i.status !== 'acquired').filter(matchesSearch).sort((a, b) => a.sort_order - b.sort_order)
+          const doneItems = catItems.filter(i => i.status === 'acquired').filter(matchesSearch)
+          const totalVisible = activeItems.length + doneItems.length
+          if (totalVisible === 0) return null
+
+          const isCollapsed = collapsedCategories.has(cat)
+          const isDoneExpanded = expandedDone.has(cat)
+          const pct = totalVisible > 0 ? Math.round((doneItems.length / totalVisible) * 100) : 0
+
           return (
-            <div key={cat} className="rounded-2xl overflow-hidden flex flex-col" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              {/* Card header */}
-              <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #f0f4f0' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-sm" style={{ color: '#2d4a30' }}>{catLabel}</span>
-                  <span className="text-xs font-medium tabular-nums" style={{ color: '#b8d0ba' }}>{doneCount} / {catVisible.length}</span>
+            <div key={cat} className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
+              <button
+                onClick={() => toggleCategory(cat)}
+                className="w-full px-4 pt-3.5 pb-3 text-left"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="font-semibold text-sm flex-1 text-left" style={{ color: '#2d4a30' }}>{catLabel}</span>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full tabular-nums shrink-0" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>
+                    {doneItems.length}/{totalVisible}
+                  </span>
+                  <svg
+                    width="18" height="18" viewBox="0 0 18 18" fill="none"
+                    style={{ color: '#b8d0ba', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}
+                  >
+                    <path d="M4.5 7l4.5 4.5L13.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </div>
-                {/* Progress bar */}
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#e4ede4' }}>
+                <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#e4ede4' }}>
                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
                 </div>
-              </div>
-              {/* Items */}
-              <div className="flex-1 divide-y" style={{ borderColor: '#f5f7f5' }}>
-                {activeVisible.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => setEditItem(item)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#f5f7f5] transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-snug" style={{ color: '#2d4a30' }}>{item.name}</p>
-                      {(item.quantity || item.quantity_have) && (
-                        <p className="text-xs mt-0.5" style={{ color: '#9db89f' }}>
-                          {item.quantity_have && item.quantity
-                            ? `${item.quantity_have} of ${item.quantity}`
-                            : item.quantity_have
-                            ? `Have: ${item.quantity_have}`
-                            : `Need: ${item.quantity}`}
-                        </p>
-                      )}
-                      {item.notes && (
-                        <p className="text-xs mt-0.5 truncate" style={{ color: '#b8d0ba' }}>{item.notes}</p>
-                      )}
+              </button>
+
+              {!isCollapsed && (
+                <div style={{ borderTop: '1px solid #f0f4f0' }}>
+                  {activeItems.length > 0 && (
+                    <div className="px-2 pb-2 pt-1 space-y-2">
+                      {activeItems.map(item => (
+                        <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                      ))}
                     </div>
-                    <span
-                      onClick={e => { e.stopPropagation(); cycleStatus(item) }}
-                      className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer"
-                      style={{ backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
-                    >
-                      {STATUS_LABEL[item.status]}
-                    </span>
-                  </button>
-                ))}
-                {acquiredVisible.length > 0 && (
-                  <details className="group">
-                    <summary className="flex items-center gap-2 px-4 py-2 cursor-pointer text-xs font-semibold select-none list-none" style={{ color: '#b8d0ba' }}>
-                      <svg className="w-3 h-3 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="none">
-                        <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                      Done · {acquiredVisible.length}
-                    </summary>
-                    {acquiredVisible.map(item => (
+                  )}
+
+                  {doneItems.length > 0 && (
+                    <>
                       <button
-                        key={item.id}
-                        onClick={() => setEditItem(item)}
-                        className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-[#f5f7f5] transition-colors"
+                        onClick={() => toggleDone(cat)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold select-none"
+                        style={{
+                          color: '#b8d0ba',
+                          borderTop: activeItems.length > 0 ? '1px solid #f0f4f0' : undefined,
+                          WebkitTapHighlightColor: 'transparent',
+                        }}
                       >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm line-through" style={{ color: '#b8d0ba' }}>{item.name}</p>
-                          {(item.quantity || item.quantity_have) && (
-                            <p className="text-xs mt-0.5" style={{ color: '#d8e8d8' }}>
-                              {item.quantity_have && item.quantity
-                                ? `${item.quantity_have} of ${item.quantity}`
-                                : item.quantity_have
-                                ? `Have: ${item.quantity_have}`
-                                : `Need: ${item.quantity}`}
-                            </p>
-                          )}
-                        </div>
-                        <span
-                          onClick={e => { e.stopPropagation(); cycleStatus(item) }}
-                          className="shrink-0 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer"
-                          style={{ backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
+                        <svg
+                          width="12" height="12" viewBox="0 0 12 12" fill="none"
+                          style={{
+                            color: '#c8d8c8',
+                            transform: isDoneExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.15s ease',
+                          }}
                         >
-                          {STATUS_LABEL[item.status]}
-                        </span>
+                          <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Done · {doneItems.length}
                       </button>
-                    ))}
-                  </details>
-                )}
-              </div>
+                      {isDoneExpanded && (
+                        <div className="px-2 pb-2 space-y-2">
+                          {doneItems.map(item => (
+                            <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
-        {items.filter(matchesSearch).length === 0 && (
-          <div className="col-span-full py-16 text-center text-sm" style={{ color: '#b8d0ba' }}>
+
+        {allCategoryKeys.every(cat => getCatItems(cat).filter(matchesSearch).length === 0) && (
+          <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
             {search.trim() ? 'No items match your search.' : 'No inventory items yet.'}
           </div>
         )}
@@ -412,7 +350,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
 
       {/* FAB */}
       <button
-        onClick={() => setShowAdd(true)}
+        onClick={() => { setAddDefaultCategory(''); setShowAdd(true) }}
         className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom"
         style={{ backgroundColor: '#7a9e7e' }}
       >
@@ -424,7 +362,8 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         <ItemModal
           item={editItem}
           isAdmin={isAdmin}
-          knownCategories={knownCategories}
+          allCategories={allCategoryNames}
+          onCreateCategory={createCategory}
           onClose={() => setEditItem(null)}
           onSave={async data => { await saveItem(editItem.id, data); setEditItem(null) }}
           onDelete={async () => { await deleteItem(editItem.id); setEditItem(null) }}
@@ -435,8 +374,9 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       {showAdd && (
         <ItemModal
           isAdmin={isAdmin}
-          knownCategories={knownCategories}
-          defaultCategory={defaultCategory}
+          allCategories={allCategoryNames}
+          defaultCategory={addDefaultCategory}
+          onCreateCategory={createCategory}
           onClose={() => setShowAdd(false)}
           onSave={async data => { await saveItem(null, data); setShowAdd(false) }}
         />
@@ -530,11 +470,12 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
   )
 }
 
-function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClose, onSave, onDelete }: {
+function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreateCategory, onClose, onSave, onDelete }: {
   item?: InventoryItem
   isAdmin: boolean
-  knownCategories: string[]
+  allCategories: string[]
   defaultCategory?: string
+  onCreateCategory?: (name: string) => Promise<void>
   onClose: () => void
   onSave: (data: Partial<InventoryItem>) => Promise<void>
   onDelete?: () => Promise<void>
@@ -704,9 +645,10 @@ function ItemModal({ item, isAdmin, knownCategories, defaultCategory = '', onClo
 
       {categorySheetOpen && (
         <CategoryPickerSheet
-          categories={knownCategories}
+          categories={allCategories}
           value={category}
           onSelect={cat => { setCategory(cat); setCategorySheetOpen(false) }}
+          onCreateCategory={onCreateCategory}
           onClose={() => setCategorySheetOpen(false)}
         />
       )}
@@ -721,21 +663,22 @@ const SUGGESTED_CATEGORIES = [
   'Jewellery', 'Cake', 'Gifts', 'Lighting',
 ]
 
-function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
+function CategoryPickerSheet({ categories, value, onSelect, onCreateCategory, onClose }: {
   categories: string[]
   value: string
   onSelect: (cat: string) => void
+  onCreateCategory?: (name: string) => Promise<void>
   onClose: () => void
 }) {
-  const [showNewInput, setShowNewInput] = useState(false)
   const [newCatText, setNewCatText] = useState('')
-  const newInputRef = useRef<HTMLInputElement>(null)
 
   const suggestions = SUGGESTED_CATEGORIES.filter(s => !categories.includes(s))
 
-  function handleAdd() {
+  async function handleAdd() {
     const trimmed = newCatText.trim()
     if (!trimmed) return
+    setNewCatText('')
+    await onCreateCategory?.(trimmed)
     onSelect(trimmed)
   }
 
@@ -764,7 +707,7 @@ function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
                   <button
                     key={s}
                     type="button"
-                    onClick={() => onSelect(s)}
+                    onClick={async () => { await onCreateCategory?.(s); onSelect(s) }}
                     className="text-sm font-medium rounded-full px-3 py-1 transition-colors"
                     style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}
                   >
@@ -810,17 +753,16 @@ function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
           ))}
 
           <div style={{ borderTop: '1px solid #d8e8d8' }}>
-            {showNewInput ? (
-              <div className="flex gap-2 px-4 py-3">
+            <div className="px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>New category</p>
+              <div className="flex gap-2">
                 <input
-                  ref={newInputRef}
-                  autoFocus
                   value={newCatText}
                   onChange={e => setNewCatText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                  onKeyDown={e => e.key === 'Enter' && newCatText.trim() && handleAdd()}
                   placeholder="Category name"
-                  className="flex-1 rounded-xl px-4 py-3 text-sm focus:outline-none"
-                  style={{ border: '1px solid #b8d0ba', color: '#2d4a30' }}
+                  className="flex-1 rounded-xl px-4 text-sm focus:outline-none"
+                  style={{ border: '1px solid #b8d0ba', color: '#2d4a30', minHeight: 48 }}
                 />
                 <button
                   type="button"
@@ -832,19 +774,7 @@ function CategoryPickerSheet({ categories, value, onSelect, onClose }: {
                   Add
                 </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setShowNewInput(true); setTimeout(() => newInputRef.current?.focus(), 50) }}
-                className="w-full flex items-center gap-3 px-5 text-sm font-medium"
-                style={{ minHeight: 52, color: '#d4849a' }}
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <path d="M9 3.75v10.5M3.75 9h10.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-                </svg>
-                Create new category
-              </button>
-            )}
+            </div>
           </div>
         </div>
 

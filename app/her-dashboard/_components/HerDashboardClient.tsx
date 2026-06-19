@@ -50,6 +50,7 @@ export default function HerDashboardClient({
   const [showSettings, setShowSettings] = useState(false)
   const [completedTasks, setCompletedTasks] = useState<Task[] | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -200,14 +201,62 @@ export default function HerDashboardClient({
                 <p className="text-sm text-center" style={{ color: '#b8d0ba' }}>No tasks right now. Enjoy the moment.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {tasks.map(task => (
-                  <HerTaskCard
-                    key={task.id}
-                    task={task}
-                    onDetail={() => setDetailTask(task)}
-                  />
-                ))}
+              <div className="space-y-2">
+                {groupTasksByMonth(tasks).map(group => {
+                  const isMonthCollapsed = collapsedMonths.has(group.key)
+                  const todayMonth = new Date().toISOString().slice(0, 7)
+                  const isCurrent = group.key === todayMonth
+                  const doneCount = group.tasks.filter(t => t.status === 'done').length
+                  const pct = group.tasks.length > 0 ? Math.round((doneCount / group.tasks.length) * 100) : 0
+                  return (
+                    <div key={group.key} className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
+                      <button
+                        onClick={() => setCollapsedMonths(prev => {
+                          const next = new Set(prev)
+                          if (next.has(group.key)) next.delete(group.key)
+                          else next.add(group.key)
+                          return next
+                        })}
+                        className="w-full px-4 pt-3.5 pb-3 text-left"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="font-semibold text-sm flex-1 text-left" style={{ color: '#2d4a30' }}>
+                            {group.label}
+                          </span>
+                          {isCurrent && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>
+                              This month
+                            </span>
+                          )}
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full tabular-nums shrink-0" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>
+                            {doneCount}/{group.tasks.length}
+                          </span>
+                          <svg
+                            width="18" height="18" viewBox="0 0 18 18" fill="none"
+                            style={{ color: '#b8d0ba', transform: isMonthCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}
+                          >
+                            <path d="M4.5 7l4.5 4.5L13.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#e4ede4' }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
+                        </div>
+                      </button>
+                      {!isMonthCollapsed && (
+                        <div className="px-2 pb-2 pt-1 space-y-2" style={{ borderTop: '1px solid #f0f4f0' }}>
+                          {group.tasks.map(task => (
+                            <HerTaskCard
+                              key={task.id}
+                              task={task}
+                              onDetail={() => setDetailTask(task)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
 
@@ -332,6 +381,25 @@ export default function HerDashboardClient({
       )}
     </div>
   )
+}
+
+function groupTasksByMonth(tasks: Task[]): { key: string; label: string; tasks: Task[] }[] {
+  const map = new Map<string, { key: string; label: string; tasks: Task[] }>()
+  for (const task of tasks) {
+    const key = task.due_date ? task.due_date.slice(0, 7) : 'none'
+    if (!map.has(key)) {
+      const label = key === 'none'
+        ? 'No due date'
+        : new Date(key + '-15').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      map.set(key, { key, label, tasks: [] })
+    }
+    map.get(key)!.tasks.push(task)
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.key === 'none') return 1
+    if (b.key === 'none') return -1
+    return a.key.localeCompare(b.key)
+  })
 }
 
 function BottomSheet({ children, onClose, title }: {

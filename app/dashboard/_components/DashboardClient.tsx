@@ -123,7 +123,8 @@ export default function DashboardClient({
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [rankText, setRankText] = useState('')
-  const [groupByDate, setGroupByDate] = useState(false)
+  const [groupByDate, setGroupByDate] = useState(true)
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
   const [dueMonthText, setDueMonthText] = useState('')
   const [knownAssignees, setKnownAssignees] = useState<string[]>(['nick', 'siobhan'])
   const [, startTransition] = useTransition()
@@ -480,32 +481,70 @@ export default function DashboardClient({
                       </SortableContext>
                     </DndContext>
                   ) : groupByDate ? (
-                    <div className="space-y-4 pb-24 lg:pb-8">
-                      {groupTasksByMonth(displayed).map(group => (
-                        <div key={group.key}>
-                          <div className="flex items-center gap-2 mb-2 px-1">
-                            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9db89f' }}>{group.label}</p>
-                            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>{group.tasks.length}</span>
+                    <div className="space-y-2 pb-24 lg:pb-8">
+                      {groupTasksByMonth(displayed).map(group => {
+                        const isMonthCollapsed = collapsedMonths.has(group.key)
+                        const todayMonth = new Date().toISOString().slice(0, 7)
+                        const isCurrent = group.key === todayMonth
+                        const doneCount = group.tasks.filter(t => t.status === 'done').length
+                        const pct = group.tasks.length > 0 ? Math.round((doneCount / group.tasks.length) * 100) : 0
+                        return (
+                          <div key={group.key} className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
+                            <button
+                              onClick={() => setCollapsedMonths(prev => {
+                                const next = new Set(prev)
+                                if (next.has(group.key)) next.delete(group.key)
+                                else next.add(group.key)
+                                return next
+                              })}
+                              className="w-full px-4 pt-3.5 pb-3 text-left"
+                              style={{ WebkitTapHighlightColor: 'transparent' }}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span className="font-semibold text-sm flex-1 text-left" style={{ color: '#2d4a30' }}>
+                                  {group.label}
+                                </span>
+                                {isCurrent && (
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>
+                                    This month
+                                  </span>
+                                )}
+                                <span className="text-xs font-medium px-2 py-0.5 rounded-full tabular-nums shrink-0" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>
+                                  {doneCount}/{group.tasks.length}
+                                </span>
+                                <svg
+                                  width="18" height="18" viewBox="0 0 18 18" fill="none"
+                                  style={{ color: '#b8d0ba', transform: isMonthCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}
+                                >
+                                  <path d="M4.5 7l4.5 4.5L13.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </div>
+                              <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#e4ede4' }}>
+                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
+                              </div>
+                            </button>
+                            {!isMonthCollapsed && (
+                              <div className="px-2 pb-2 pt-1 space-y-2" style={{ borderTop: '1px solid #f0f4f0' }}>
+                                {group.tasks.map((task, i) => (
+                                  <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    pos={i + 1}
+                                    onDetail={() => setDetailTask(task)}
+                                    onEdit={() => setEditTask(task)}
+                                    onDelete={() => deleteTask(task.id)}
+                                    onPatch={u => patchTask(task.id, u)}
+                                    onRequestConfirm={askConfirm}
+                                    selectMode={tab === 'tasks' && selectMode}
+                                    selected={selectedIds.has(task.id)}
+                                    onToggleSelect={() => toggleSelect(task.id)}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div className="space-y-2">
-                            {group.tasks.map((task, i) => (
-                              <TaskCard
-                                key={task.id}
-                                task={task}
-                                pos={i + 1}
-                                onDetail={() => setDetailTask(task)}
-                                onEdit={() => setEditTask(task)}
-                                onDelete={() => deleteTask(task.id)}
-                                onPatch={u => patchTask(task.id, u)}
-                                onRequestConfirm={askConfirm}
-                                selectMode={tab === 'tasks' && selectMode}
-                                selected={selectedIds.has(task.id)}
-                                onToggleSelect={() => toggleSelect(task.id)}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   ) : (
                     <div className="space-y-2 pb-24 lg:pb-8">

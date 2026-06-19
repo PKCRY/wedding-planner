@@ -58,6 +58,13 @@ export interface InventoryItem {
   created_by: string
 }
 
+export interface InventoryCategory {
+  id: number
+  name: string
+  sort_order: number
+  created_at: string
+}
+
 export function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
 }

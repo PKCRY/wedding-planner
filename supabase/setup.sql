@@ -96,6 +96,26 @@ ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ADD COLUMN IF NOT EXISTS quantity_have text NOT NULL DEFAULT '';
 ALTER TABLE inventory ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT '';
 
+-- ── Inventory categories ──────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS inventory_categories (
+  id         bigserial    PRIMARY KEY,
+  name       text         NOT NULL UNIQUE,
+  sort_order integer      NOT NULL DEFAULT 999,
+  created_at timestamptz  NOT NULL DEFAULT now()
+);
+ALTER TABLE inventory_categories DISABLE ROW LEVEL SECURITY;
+
+-- Seed categories from existing inventory items (idempotent)
+INSERT INTO inventory_categories (name)
+SELECT DISTINCT TRIM(category) FROM inventory WHERE TRIM(category) != ''
+ON CONFLICT (name) DO NOTHING;
+
+-- ── Task due date cleanup ─────────────────────────────────────────────────
+
+-- Move all pre-June tasks to end of June
+UPDATE tasks SET due_date = '2026-06-30' WHERE due_date < '2026-06-01' AND due_date IS NOT NULL;
+
 -- ── Member accounts (password-protected registered users) ─────────────────
 
 CREATE TABLE IF NOT EXISTS member_users (
