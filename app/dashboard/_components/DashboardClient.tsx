@@ -128,11 +128,15 @@ export default function DashboardClient({
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
   const [dueMonthText, setDueMonthText] = useState('')
   const [knownAssignees, setKnownAssignees] = useState<string[]>(['nick', 'siobhan'])
+  const [uncatInventoryCount, setUncatInventoryCount] = useState(0)
   const [, startTransition] = useTransition()
 
   useEffect(() => {
     fetch('/api/assignees').then(r => r.ok ? r.json() : null).then(names => {
       if (names) setKnownAssignees(names)
+    })
+    fetch('/api/inventory').then(r => r.ok ? r.json() : []).then((items: { category?: string }[]) => {
+      setUncatInventoryCount(items.filter(i => !i.category?.trim()).length)
     })
   }, [])
 
@@ -360,7 +364,7 @@ export default function DashboardClient({
               {([
                 { key: 'tasks',     label: 'Active' },
                 { key: 'completed', label: 'Done' },
-                { key: 'review',    label: `Review${reviewTasks.length ? ` (${reviewTasks.length})` : ''}` },
+                { key: 'review',    label: `Review${(reviewTasks.length + uncatInventoryCount) ? ` (${reviewTasks.length + uncatInventoryCount})` : ''}` },
                 { key: 'inventory', label: 'Inventory' },
                 ...(user.id === 'nick' ? [{ key: 'notify', label: 'Notify' }] : []),
                 { key: 'calendar',  label: 'Calendar', lgHide: true },
