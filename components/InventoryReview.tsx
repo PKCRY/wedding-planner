@@ -41,8 +41,8 @@ export default function InventoryReview() {
     const cats: InventoryCategory[] = catsRes.ok ? await catsRes.json() : []
     setAllItems(items)
     setCategories(cats)
-    // Uncategorized first, then needed/partial — skip acquired
-    const uncategorized = items.filter(i => !i.category?.trim() && i.status !== 'acquired')
+    // All uncategorized first (any status), then non-acquired categorized
+    const uncategorized = items.filter(i => !i.category?.trim())
     const categorized = items.filter(i => i.category?.trim() && i.status !== 'acquired')
     setQueue([...uncategorized, ...categorized])
     setLoading(false)
