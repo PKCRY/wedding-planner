@@ -61,9 +61,16 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
   const [expandedDone, setExpandedDone] = useState<Set<string>>(new Set())
 
+  // Sensors for item drag (kept for future use)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } }),
+  )
+
+  // Sensors for category drag (longer touch delay so taps still work)
+  const catSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   )
 
   useEffect(() => { load() }, [])
@@ -108,6 +115,21 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(withOrder.map(i => ({ id: i.id, sort_order: i.sort_order }))),
+    }).catch(() => {})
+  }
+
+  async function handleCatDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = categories.findIndex(c => c.id === active.id)
+    const newIndex = categories.findIndex(c => c.id === over.id)
+    const reordered = arrayMove(categories, oldIndex, newIndex)
+    const withOrder = reordered.map((c, idx) => ({ ...c, sort_order: idx + 1 }))
+    setCategories(withOrder)
+    fetch('/api/inventory/categories/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(withOrder.map(c => ({ id: c.id, sort_order: c.sort_order }))),
     }).catch(() => {})
   }
 
@@ -158,7 +180,11 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     if (!res.ok) return
     setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c))
     if (updateItems) {
-      setItems(prev => prev.map(i => i.category === oldName ? { ...i, category: newName } : i))
+      setItems(prev => prev.map(i => ({
+        ...i,
+        category: i.category === oldName ? newName : i.category,
+        secondary_category: i.secondary_category === oldName ? newName : i.secondary_category,
+      })))
     }
   }
 
@@ -193,22 +219,26 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       item.name.toLowerCase().includes(q) ||
       (item.notes ?? '').toLowerCase().includes(q) ||
       (item.responsible_party ?? '').toLowerCase().includes(q) ||
-      (item.category ?? '').toLowerCase().includes(q)
+      (item.category ?? '').toLowerCase().includes(q) ||
+      (item.secondary_category ?? '').toLowerCase().includes(q)
     )
   }
 
-  const allCategoryNames = categories.map(c => c.name).sort()
+  // Categories ordered by sort_order (from API, not re-sorted alphabetically)
+  const allCategoryNames = categories.map(c => c.name)
   const itemCounts: Record<string, number> = {}
   for (const cat of allCategoryNames) {
-    itemCounts[cat] = items.filter(i => i.category === cat).length
+    itemCounts[cat] = items.filter(i => i.category === cat || i.secondary_category === cat).length
   }
 
-  const hasUncategorized = items.some(i => !i.category)
-  const allCategoryKeys = [...allCategoryNames, ...(hasUncategorized ? ['__none__'] : [])]
+  const hasUncategorized = items.some(i => !i.category && !i.secondary_category)
 
   function getCatItems(cat: string) {
-    return items.filter(i => cat === '__none__' ? !i.category : i.category === cat)
+    if (cat === '__none__') return items.filter(i => !i.category && !i.secondary_category)
+    return items.filter(i => i.category === cat || i.secondary_category === cat)
   }
+
+  const allCategoryKeys = [...allCategoryNames, ...(hasUncategorized ? ['__none__'] : [])]
 
   const counts = {
     needed: items.filter(i => i.status === 'needed').length,
@@ -218,6 +248,20 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
 
   if (loading) {
     return <div className="py-12 text-center text-sm" style={{ color: '#9db89f' }}>Loading inventory...</div>
+  }
+
+  function renderCatContent(catKey: string) {
+    const catItems = getCatItems(catKey)
+    const activeItems = catItems.filter(i => i.status !== 'acquired').filter(matchesSearch).sort((a, b) => a.sort_order - b.sort_order)
+    const doneItems = catItems.filter(i => i.status === 'acquired').filter(matchesSearch)
+    const totalVisible = activeItems.length + doneItems.length
+    if (totalVisible === 0) return null
+
+    const isCollapsed = collapsedCategories.has(catKey)
+    const isDoneExpanded = expandedDone.has(catKey)
+    const pct = totalVisible > 0 ? Math.round((doneItems.length / totalVisible) * 100) : 0
+
+    return { activeItems, doneItems, totalVisible, isCollapsed, isDoneExpanded, pct }
   }
 
   return (
@@ -259,98 +303,162 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      {/* ── Category accordion ── */}
-      <div className="space-y-2 pb-24 lg:pb-8">
-        {allCategoryKeys.map(cat => {
-          const catLabel = cat === '__none__' ? 'Other' : cat
-          const catItems = getCatItems(cat)
-          const activeItems = catItems.filter(i => i.status !== 'acquired').filter(matchesSearch).sort((a, b) => a.sort_order - b.sort_order)
-          const doneItems = catItems.filter(i => i.status === 'acquired').filter(matchesSearch)
-          const totalVisible = activeItems.length + doneItems.length
-          if (totalVisible === 0) return null
+      {/* ── Category accordion (sortable) ── */}
+      <DndContext sensors={catSensors} collisionDetection={closestCenter} onDragEnd={handleCatDragEnd}>
+        <SortableContext items={categories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2 pb-24 lg:pb-8">
 
-          const isCollapsed = collapsedCategories.has(cat)
-          const isDoneExpanded = expandedDone.has(cat)
-          const pct = totalVisible > 0 ? Math.round((doneItems.length / totalVisible) * 100) : 0
+            {/* Named categories (sortable) */}
+            {categories.map(cat => {
+              const content = renderCatContent(cat.name)
+              if (!content) return null
+              const { activeItems, doneItems, totalVisible, isCollapsed, isDoneExpanded, pct } = content
 
-          return (
-            <div key={cat} className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
-              <button
-                onClick={() => toggleCategory(cat)}
-                className="w-full px-4 pt-3.5 pb-3 text-left"
-                style={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="font-semibold text-sm flex-1 text-left" style={{ color: '#2d4a30' }}>{catLabel}</span>
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full tabular-nums shrink-0" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>
-                    {doneItems.length}/{totalVisible}
-                  </span>
-                  <svg
-                    width="18" height="18" viewBox="0 0 18 18" fill="none"
-                    style={{ color: '#b8d0ba', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}
-                  >
-                    <path d="M4.5 7l4.5 4.5L13.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#e4ede4' }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
-                </div>
-              </button>
+              return (
+                <SortableCatBlock key={cat.id} catId={cat.id}>
+                  {(handleProps) => (
+                    <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
+                      <div className="flex items-center" style={{ WebkitTapHighlightColor: 'transparent' }}>
+                        {/* Drag handle */}
+                        <button
+                          {...handleProps}
+                          onClick={e => e.stopPropagation()}
+                          className="flex items-center justify-center shrink-0"
+                          style={{ color: '#c8dcc8', cursor: 'grab', touchAction: 'none', padding: '14px 2px 14px 10px', userSelect: 'none', WebkitUserSelect: 'none' }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <circle cx="5" cy="4" r="1.5" fill="currentColor"/>
+                            <circle cx="11" cy="4" r="1.5" fill="currentColor"/>
+                            <circle cx="5" cy="8" r="1.5" fill="currentColor"/>
+                            <circle cx="11" cy="8" r="1.5" fill="currentColor"/>
+                            <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+                            <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+                          </svg>
+                        </button>
+                        {/* Collapse toggle */}
+                        <button
+                          onClick={() => toggleCategory(cat.name)}
+                          className="flex-1 pr-4 pt-3.5 pb-3 text-left"
+                          style={{ paddingLeft: 6, WebkitTapHighlightColor: 'transparent' }}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-semibold text-sm flex-1 text-left" style={{ color: '#2d4a30' }}>{cat.name}</span>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full tabular-nums shrink-0" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>
+                              {doneItems.length}/{totalVisible}
+                            </span>
+                            <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
+                              style={{ color: '#b8d0ba', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}>
+                              <path d="M4.5 7l4.5 4.5L13.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </div>
+                          <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#e4ede4' }}>
+                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
+                          </div>
+                        </button>
+                      </div>
 
-              {!isCollapsed && (
-                <div style={{ borderTop: '1px solid #f0f4f0' }}>
-                  {activeItems.length > 0 && (
-                    <div className="px-2 pb-2 pt-1 space-y-2">
-                      {activeItems.map(item => (
-                        <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
-                      ))}
+                      {!isCollapsed && (
+                        <div style={{ borderTop: '1px solid #f0f4f0' }}>
+                          {activeItems.length > 0 && (
+                            <div className="px-2 pb-2 pt-1 space-y-2">
+                              {activeItems.map(item => (
+                                <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                              ))}
+                            </div>
+                          )}
+                          {doneItems.length > 0 && (
+                            <>
+                              <button onClick={() => toggleDone(cat.name)}
+                                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold select-none"
+                                style={{ color: '#b8d0ba', borderTop: activeItems.length > 0 ? '1px solid #f0f4f0' : undefined, WebkitTapHighlightColor: 'transparent' }}>
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                                  style={{ color: '#c8d8c8', transform: isDoneExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>
+                                  <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                Done · {doneItems.length}
+                              </button>
+                              {isDoneExpanded && (
+                                <div className="px-2 pb-2 space-y-2">
+                                  {doneItems.map(item => (
+                                    <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
+                </SortableCatBlock>
+              )
+            })}
 
-                  {doneItems.length > 0 && (
-                    <>
-                      <button
-                        onClick={() => toggleDone(cat)}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold select-none"
-                        style={{
-                          color: '#b8d0ba',
-                          borderTop: activeItems.length > 0 ? '1px solid #f0f4f0' : undefined,
-                          WebkitTapHighlightColor: 'transparent',
-                        }}
-                      >
-                        <svg
-                          width="12" height="12" viewBox="0 0 12 12" fill="none"
-                          style={{
-                            color: '#c8d8c8',
-                            transform: isDoneExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                            transition: 'transform 0.15s ease',
-                          }}
-                        >
-                          <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Done · {doneItems.length}
-                      </button>
-                      {isDoneExpanded && (
-                        <div className="px-2 pb-2 space-y-2">
-                          {doneItems.map(item => (
+            {/* Uncategorized (not sortable, always last) */}
+            {hasUncategorized && (() => {
+              const content = renderCatContent('__none__')
+              if (!content) return null
+              const { activeItems, doneItems, totalVisible, isCollapsed, isDoneExpanded, pct } = content
+              return (
+                <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
+                  <button onClick={() => toggleCategory('__none__')} className="w-full px-4 pt-3.5 pb-3 text-left" style={{ WebkitTapHighlightColor: 'transparent' }}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="font-semibold text-sm flex-1 text-left" style={{ color: '#2d4a30' }}>Other</span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full tabular-nums shrink-0" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>
+                        {doneItems.length}/{totalVisible}
+                      </span>
+                      <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
+                        style={{ color: '#b8d0ba', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}>
+                        <path d="M4.5 7l4.5 4.5L13.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#e4ede4' }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
+                    </div>
+                  </button>
+                  {!isCollapsed && (
+                    <div style={{ borderTop: '1px solid #f0f4f0' }}>
+                      {activeItems.length > 0 && (
+                        <div className="px-2 pb-2 pt-1 space-y-2">
+                          {activeItems.map(item => (
                             <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
                           ))}
                         </div>
                       )}
-                    </>
+                      {doneItems.length > 0 && (
+                        <>
+                          <button onClick={() => toggleDone('__none__')}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold select-none"
+                            style={{ color: '#b8d0ba', borderTop: activeItems.length > 0 ? '1px solid #f0f4f0' : undefined, WebkitTapHighlightColor: 'transparent' }}>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                              style={{ color: '#c8d8c8', transform: isDoneExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>
+                              <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            Done · {doneItems.length}
+                          </button>
+                          {isDoneExpanded && (
+                            <div className="px-2 pb-2 space-y-2">
+                              {doneItems.map(item => (
+                                <ItemCard key={item.id} item={item} isAdmin={isAdmin} onCycle={() => cycleStatus(item)} onEdit={() => setEditItem(item)} />
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          )
-        })}
+              )
+            })()}
 
-        {allCategoryKeys.every(cat => getCatItems(cat).filter(matchesSearch).length === 0) && (
-          <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
-            {search.trim() ? 'No items match your search.' : 'No inventory items yet.'}
+            {allCategoryKeys.every(cat => getCatItems(cat).filter(matchesSearch).length === 0) && (
+              <div className="py-8 text-center text-sm" style={{ color: '#b8d0ba' }}>
+                {search.trim() ? 'No items match your search.' : 'No inventory items yet.'}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       {/* FAB */}
       <button
@@ -395,6 +503,22 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   )
 }
 
+// ── Sortable category wrapper ────────────────────────────────────────────────
+
+function SortableCatBlock({ catId, children }: {
+  catId: number
+  children: (handleProps: React.HTMLAttributes<HTMLElement>) => React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: catId })
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
+      {children({ ...attributes, ...listeners })}
+    </div>
+  )
+}
+
+// ── Item card ────────────────────────────────────────────────────────────────
+
 type CardCb = () => void | Promise<void>
 type ItemCardProps = {
   item: InventoryItem
@@ -403,13 +527,11 @@ type ItemCardProps = {
   onEdit: CardCb
   dragHandle?: Record<string, unknown>
 }
+
 function SortableItemCard(props: ItemCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.item.id })
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-    >
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
       <ItemCard {...props} dragHandle={{ ...attributes, ...listeners }} />
     </div>
   )
@@ -442,6 +564,7 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
               ].filter(Boolean).join(' · ')}
             </p>
           )}
+
           {item.notes && (
             <p className="text-xs mt-0.5 break-words" style={{ color: '#b8d0ba' }}>{item.notes}</p>
           )}
@@ -480,6 +603,8 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
   )
 }
 
+// ── Item modal ───────────────────────────────────────────────────────────────
+
 function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory = '', onCreateCategory, onRenameCategory, onDeleteCategory, onClose, onSave, onDelete }: {
   item?: InventoryItem
   isAdmin: boolean
@@ -495,6 +620,7 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
 }) {
   const [name, setName] = useState(item?.name ?? '')
   const [category, setCategory] = useState(item?.category ?? defaultCategory)
+  const [secondaryCategory, setSecondaryCategory] = useState(item?.secondary_category ?? '')
   const [quantity, setQuantity] = useState(item?.quantity ?? '')
   const [quantityHave, setQuantityHave] = useState(item?.quantity_have ?? '')
   const [status, setStatus] = useState<InventoryItem['status']>(item?.status ?? 'needed')
@@ -504,9 +630,8 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [categorySheetOpen, setCategorySheetOpen] = useState(false)
+  const [secondaryCategorySheetOpen, setSecondaryCategorySheetOpen] = useState(false)
   const [showAddTimeline, setShowAddTimeline] = useState(false)
-
-  const allCategoryNames = allCategories.map(c => c.name).sort()
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -516,6 +641,7 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
     await onSave({
       name: name.trim(),
       category: category.trim(),
+      secondary_category: secondaryCategory.trim(),
       quantity,
       quantity_have: quantityHave,
       status,
@@ -557,7 +683,7 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
             style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
           />
 
-          {/* Category */}
+          {/* Primary Category */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: '#b8d0ba' }}>Category</p>
             <button
@@ -570,6 +696,31 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f', flexShrink: 0 }}>
                 <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
+            </button>
+          </div>
+
+          {/* Secondary Category */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: '#b8d0ba' }}>Second category <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional — card appears in both)</span></p>
+            <button
+              type="button"
+              onClick={() => setSecondaryCategorySheetOpen(true)}
+              className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between focus:outline-none text-sm"
+              style={{ border: '1px solid #d8e8d8', color: secondaryCategory ? '#2d4a30' : '#9db89f', backgroundColor: '#f5f7f5' }}
+            >
+              <span>{secondaryCategory || 'None'}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                {secondaryCategory && (
+                  <span
+                    onClick={e => { e.stopPropagation(); setSecondaryCategory('') }}
+                    className="text-xs px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}
+                  >Clear</span>
+                )}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f' }}>
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
             </button>
           </div>
 
@@ -687,6 +838,17 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
         />
       )}
 
+      {secondaryCategorySheetOpen && (
+        <CategoryPickerSheet
+          categories={allCategories}
+          itemCounts={itemCounts}
+          value={secondaryCategory}
+          onSelect={cat => { setSecondaryCategory(cat); setSecondaryCategorySheetOpen(false) }}
+          onCreateCategory={onCreateCategory}
+          onClose={() => setSecondaryCategorySheetOpen(false)}
+        />
+      )}
+
       {showAddTimeline && item && (
         <AddToTimelineSheet
           title={item.name}
@@ -698,6 +860,8 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
     </div>
   )
 }
+
+// ── Category picker sheet ────────────────────────────────────────────────────
 
 const SUGGESTED_CATEGORIES = [
   'Flowers', 'Decorations', 'Catering', 'Drinks', 'Clothing',

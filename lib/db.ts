@@ -48,6 +48,7 @@ export interface InventoryItem {
   id: number
   name: string
   category: string
+  secondary_category: string
   quantity: string
   quantity_have: string
   status: 'needed' | 'partial' | 'acquired'

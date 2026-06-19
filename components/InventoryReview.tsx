@@ -261,6 +261,7 @@ export default function InventoryReview() {
                         ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>No category</span>
                         : <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}>{current.category}</span>
                       }
+
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={STATUS_COLORS[current.status]}>
                         {STATUS_COLORS[current.status].label}
                       </span>
@@ -371,6 +372,7 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
 }) {
   const wasUncategorized = !item.category?.trim()
   const [category, setCategory] = useState(item.category ?? '')
+  const [secondaryCategory, setSecondaryCategory] = useState(item.secondary_category ?? '')
   const [status, setStatus] = useState<InventoryItem['status']>(item.status)
   const [quantityHave, setQuantityHave] = useState(item.quantity_have ?? '')
   const [quantity, setQuantity] = useState(item.quantity ?? '')
@@ -393,7 +395,7 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
     setShowCatInput(false)
   }
 
-  const payload = { category, status, quantity_have: quantityHave, quantity, notes }
+  const payload = { category, secondary_category: secondaryCategory, status, quantity_have: quantityHave, quantity, notes }
 
   async function submit() {
     setSaving(true)
@@ -493,6 +495,31 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Second category */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Second category <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></p>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <button key={cat} type="button"
+                  onClick={() => setSecondaryCategory(secondaryCategory === cat ? '' : cat)}
+                  className="text-sm font-medium rounded-full px-3 py-1.5 transition-colors"
+                  style={{ backgroundColor: secondaryCategory === cat ? '#4a5a8a' : '#eef0f8', color: secondaryCategory === cat ? '#fff' : '#4a5a8a' }}>
+                  {cat}
+                </button>
+              ))}
+              {secondaryCategory && !categories.includes(secondaryCategory) && (
+                <span className="text-sm font-medium rounded-full px-3 py-1.5" style={{ backgroundColor: '#4a5a8a', color: '#fff' }}>{secondaryCategory}</span>
+              )}
+              {secondaryCategory && (
+                <button type="button" onClick={() => setSecondaryCategory('')}
+                  className="text-sm font-medium rounded-full px-3 py-1.5"
+                  style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Status */}
