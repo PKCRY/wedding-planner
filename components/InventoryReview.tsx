@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { InventoryItem, InventoryCategory } from '@/lib/db'
 
 const STATUS_COLORS = {
   needed:   { bg: '#fce8ef', color: '#c0607a', label: 'Still Need' },
-  partial:  { bg: '#fef9e7', color: '#a07800', label: 'Partial' },
+  partial:  { bg: '#fef9e7', color: '#a07800', label: 'In Progress' },
   acquired: { bg: '#e8f4e8', color: '#2d6a30', label: 'Done' },
 }
 
@@ -26,9 +26,13 @@ export default function InventoryReview() {
   const [dragging, setDragging] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [loading, setLoading] = useState(true)
-  const startX = useRef(0)
-  const cardRef = useRef<HTMLDivElement>(null)
-  const wasDrag = useRef(false)
+
+  // Refs for stable touch handling (no stale closure issues)
+  const [cardNode, setCardNode] = useState<HTMLDivElement | null>(null)
+  const cardRef = useCallback((node: HTMLDivElement | null) => setCardNode(node), [])
+  const wasDrag   = useRef(false)
+  const touchInfo = useRef({ x: 0, y: 0, active: false, horizontal: false })
+  const currentRef = useRef<InventoryItem | undefined>(undefined)
 
   useEffect(() => { load() }, [])
 
@@ -41,7 +45,6 @@ export default function InventoryReview() {
     const cats: InventoryCategory[] = catsRes.ok ? await catsRes.json() : []
     setAllItems(items)
     setCategories(cats)
-    // All uncategorized first (any status), then non-acquired categorized
     const uncategorized = items.filter(i => !i.category?.trim())
     const categorized = items.filter(i => i.category?.trim() && i.status !== 'acquired')
     setQueue([...uncategorized, ...categorized])
@@ -54,6 +57,7 @@ export default function InventoryReview() {
   }
 
   const current = queue[index]
+  currentRef.current = current   // always fresh, safe to read from touch handlers
   const remaining = queue.length - index
 
   function advance(dir: 'left' | 'right') {
@@ -65,42 +69,100 @@ export default function InventoryReview() {
     }, 260)
   }
 
-  async function approve() {
-    if (!current) return
-    const res = await fetch(`/api/inventory/${current.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'acquired' }),
-    })
-    if (res.ok) updateItem(await res.json())
-    advance('right')
-  }
+  // ✓ swipe = reviewed (no status change — use edit sheet to mark acquired)
+  function markReviewed() { advance('right') }
+  function skip()         { advance('left')  }
 
-  function skip() { advance('left') }
+  // ── Non-passive touch listeners for reliable mobile swipe ──
+  useEffect(() => {
+    if (!cardNode) return
+
+    function onTouchStart(e: TouchEvent) {
+      touchInfo.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, active: true, horizontal: false }
+      wasDrag.current = false
+      setDragging(true)
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      const t = touchInfo.current
+      if (!t.active) return
+      const dx = e.touches[0].clientX - t.x
+      const dy = e.touches[0].clientY - t.y
+
+      if (!t.horizontal) {
+        // More vertical than horizontal → hand off to page scroll
+        if (Math.abs(dy) > Math.abs(dx) + 4) {
+          t.active = false
+          setDragging(false)
+          setDragX(0)
+          return
+        }
+        if (Math.abs(dx) > 5) t.horizontal = true
+      }
+
+      if (t.horizontal) {
+        e.preventDefault()   // blocks page scroll — requires passive: false
+        wasDrag.current = true
+        setDragX(dx)
+      }
+    }
+
+    function onTouchEnd(e: TouchEvent) {
+      const t = touchInfo.current
+      if (!t.active) return
+      t.active = false
+      setDragging(false)
+      const dx = e.changedTouches[0].clientX - t.x
+
+      if (!wasDrag.current) {
+        setDragX(0)
+        if (currentRef.current) setEditItem(currentRef.current)
+      } else if (dx > 80) {
+        markReviewed()
+      } else if (dx < -80) {
+        skip()
+      } else {
+        setDragX(0)
+      }
+    }
+
+    cardNode.addEventListener('touchstart', onTouchStart, { passive: true })
+    cardNode.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    cardNode.addEventListener('touchend',   onTouchEnd,   { passive: true })
+    return () => {
+      cardNode.removeEventListener('touchstart', onTouchStart)
+      cardNode.removeEventListener('touchmove',  onTouchMove)
+      cardNode.removeEventListener('touchend',   onTouchEnd)
+    }
+  }, [cardNode]) // re-attaches when card mounts/unmounts
+
+  // ── Mouse drag (desktop only — pointer events skip touch) ──
+  const mouseX = useRef(0)
 
   function onPointerDown(e: React.PointerEvent) {
-    startX.current = e.clientX
+    if (e.pointerType === 'touch') return
+    mouseX.current = e.clientX
     wasDrag.current = false
     setDragging(true)
-    cardRef.current?.setPointerCapture(e.pointerId)
+    cardNode?.setPointerCapture(e.pointerId)
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (!dragging) return
-    const dx = e.clientX - startX.current
+    if (e.pointerType === 'touch' || !dragging) return
+    const dx = e.clientX - mouseX.current
     if (Math.abs(dx) > 6) wasDrag.current = true
     setDragX(dx)
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (!dragging) return
+    if (e.pointerType === 'touch' || !dragging) return
     setDragging(false)
-    const dx = e.clientX - startX.current
+    const dx = e.clientX - mouseX.current
     if (!wasDrag.current) {
       setDragX(0)
       setEditItem(current)
     } else if (dx > 80) {
-      approve()
+      markReviewed()
     } else if (dx < -80) {
       skip()
     } else {
@@ -174,16 +236,16 @@ export default function InventoryReview() {
               <div
                 ref={cardRef}
                 className="absolute inset-x-0 rounded-3xl cursor-grab active:cursor-grabbing"
-                style={{ ...cardStyle, backgroundColor: '#fff', border: '1px solid #e4ede4', zIndex: 2, boxShadow: '0 6px 24px rgba(0,0,0,0.09)', touchAction: 'none', height: 198, userSelect: 'none', WebkitUserSelect: 'none' }}
+                style={{ ...cardStyle, backgroundColor: '#fff', border: '1px solid #e4ede4', zIndex: 2, boxShadow: '0 6px 24px rgba(0,0,0,0.09)', touchAction: 'pan-y', height: 198, userSelect: 'none', WebkitUserSelect: 'none' }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
-                onPointerLeave={() => { if (dragging) { setDragging(false); setDragX(0) } }}
+                onPointerLeave={() => { if (dragging && !touchInfo.current.active) { setDragging(false); setDragX(0) } }}
               >
                 {/* Swipe overlays */}
                 {dragX > 10 && (
                   <div className="absolute inset-0 rounded-3xl flex items-center pl-5 pointer-events-none" style={{ backgroundColor: 'rgba(122,158,126,0.12)' }}>
-                    <span className="text-xl font-bold" style={{ color: '#7a9e7e', opacity: Math.min(1, dragX / 70) }}>✓ DONE</span>
+                    <span className="text-xl font-bold" style={{ color: '#7a9e7e', opacity: Math.min(1, dragX / 70) }}>✓ REVIEWED</span>
                   </div>
                 )}
                 {dragX < -10 && (
@@ -238,9 +300,10 @@ export default function InventoryReview() {
                 Edit / Categorize
               </button>
               <button
-                onClick={approve}
+                onClick={markReviewed}
                 className="w-14 h-14 rounded-full flex items-center justify-center text-xl"
                 style={{ backgroundColor: '#e8f4e8', color: '#7a9e7e', border: '2px solid #b8d8b8', boxShadow: '0 2px 8px rgba(122,158,126,0.15)' }}
+                title="Mark reviewed"
               >
                 ✓
               </button>
@@ -264,6 +327,22 @@ export default function InventoryReview() {
             if (res.ok) updateItem(await res.json())
             setEditItem(null)
           }}
+          onSaveAndApprove={async (updates) => {
+            const res = await fetch(`/api/inventory/${editItem.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...updates, status: 'acquired' }),
+            })
+            if (res.ok) updateItem(await res.json())
+            setEditItem(null)
+            advance('right')
+          }}
+          onDelete={async () => {
+            await fetch(`/api/inventory/${editItem.id}`, { method: 'DELETE' })
+            setAllItems(prev => prev.filter(i => i.id !== editItem.id))
+            setQueue(prev => prev.filter(i => i.id !== editItem.id))
+            setEditItem(null)
+          }}
           onCreateCategory={async (name) => {
             const res = await fetch('/api/inventory/categories', {
               method: 'POST',
@@ -281,21 +360,27 @@ export default function InventoryReview() {
   )
 }
 
-function ReviewEditSheet({ item, categories, onClose, onSave, onCreateCategory }: {
+function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, onDelete, onCreateCategory }: {
   item: InventoryItem
   categories: string[]
   onClose: () => void
   onSave: (updates: Partial<InventoryItem>) => Promise<void>
+  onSaveAndApprove: (updates: Partial<InventoryItem>) => Promise<void>
+  onDelete: () => Promise<void>
   onCreateCategory: (name: string) => Promise<void>
 }) {
+  const wasUncategorized = !item.category?.trim()
   const [category, setCategory] = useState(item.category ?? '')
   const [status, setStatus] = useState<InventoryItem['status']>(item.status)
   const [quantityHave, setQuantityHave] = useState(item.quantity_have ?? '')
   const [quantity, setQuantity] = useState(item.quantity ?? '')
   const [notes, setNotes] = useState(item.notes ?? '')
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [newCat, setNewCat] = useState('')
   const [showCatInput, setShowCatInput] = useState(false)
+
+  const categoryJustAdded = wasUncategorized && !!category.trim()
 
   const suggestions = SUGGESTED.filter(s => !categories.includes(s) && s !== category)
 
@@ -308,9 +393,22 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onCreateCategory }
     setShowCatInput(false)
   }
 
+  const payload = { category, status, quantity_have: quantityHave, quantity, notes }
+
   async function submit() {
     setSaving(true)
-    await onSave({ category, status, quantity_have: quantityHave, quantity, notes })
+    // Auto-approve when the only reason it was uncategorized is now fixed
+    if (categoryJustAdded) {
+      await onSaveAndApprove(payload)
+    } else {
+      await onSave(payload)
+    }
+    setSaving(false)
+  }
+
+  async function submitAndApprove() {
+    setSaving(true)
+    await onSaveAndApprove(payload)
     setSaving(false)
   }
 
@@ -434,11 +532,77 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onCreateCategory }
             className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none resize-none"
             style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }} />
 
-          <button onClick={submit} disabled={saving}
-            className="w-full font-semibold rounded-2xl text-white"
-            style={{ backgroundColor: '#7a9e7e', opacity: saving ? 0.5 : 1, minHeight: 52 }}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          {/* Auto-approve hint */}
+          {categoryJustAdded && (
+            <div className="rounded-xl px-4 py-2.5 flex items-center gap-2" style={{ backgroundColor: '#e8f4e8', border: '1px solid #b8d8b8' }}>
+              <span style={{ fontSize: 15 }}>✓</span>
+              <p className="text-xs font-medium" style={{ color: '#2d6a30' }}>
+                Category added — saving will approve this item
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {/* Primary action: auto-approve if category just added, otherwise plain save */}
+            <button
+              onClick={submit}
+              disabled={saving}
+              className="flex-1 font-semibold rounded-2xl text-white"
+              style={{
+                backgroundColor: categoryJustAdded ? '#2d6a30' : '#7a9e7e',
+                opacity: saving ? 0.5 : 1,
+                minHeight: 52,
+              }}
+            >
+              {saving ? 'Saving…' : categoryJustAdded ? 'Save & Approve ✓' : 'Save'}
+            </button>
+
+            {/* Explicit approve button — always available, hidden if already acquired */}
+            {!categoryJustAdded && status !== 'acquired' && (
+              <button
+                onClick={submitAndApprove}
+                disabled={saving}
+                className="font-semibold rounded-2xl text-white px-4"
+                style={{ backgroundColor: '#7a9e7e', opacity: saving ? 0.5 : 1, minHeight: 52, whiteSpace: 'nowrap' }}
+              >
+                Approve ✓
+              </button>
+            )}
+          </div>
+
+          {/* Delete */}
+          {confirmDelete ? (
+            <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: '#fce8ef', border: '1px solid #f0b8c8' }}>
+              <p className="text-sm font-semibold text-center" style={{ color: '#2d4a30' }}>Remove "{item.name}"?</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="flex-1 rounded-2xl text-sm font-semibold"
+                  style={{ backgroundColor: '#fff', color: '#9db89f', minHeight: 44, border: '1px solid #e4ede4' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="flex-1 rounded-2xl text-sm font-semibold text-white"
+                  style={{ backgroundColor: '#c0607a', minHeight: 44 }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="w-full rounded-2xl text-sm font-semibold"
+              style={{ backgroundColor: '#fce8ef', color: '#c0607a', minHeight: 44 }}
+            >
+              Delete Item
+            </button>
+          )}
         </div>
         <div className="shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
       </div>

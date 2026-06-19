@@ -8,6 +8,7 @@ import Calendar from '@/components/Calendar'
 import PushManagerInline from '@/components/PushManagerInline'
 import InventoryList from '@/components/InventoryList'
 import NotificationCenter from '@/components/NotificationCenter'
+import Timeline from '@/components/Timeline'
 
 const STATUS_BAR: Record<string, string> = {
   done:        '#7a9e7e',
@@ -27,7 +28,7 @@ const STATUS_LABEL: Record<string, string> = {
   pending: 'To Do', in_progress: 'In Progress', done: 'Done', blocked: 'Blocked',
 }
 
-type Tab = 'tasks' | 'blocked' | 'calendar' | 'inventory'
+type Tab = 'tasks' | 'blocked' | 'calendar' | 'inventory' | 'timeline'
 
 export default function HerDashboardClient({
   user,
@@ -51,6 +52,9 @@ export default function HerDashboardClient({
   const [completedTasks, setCompletedTasks] = useState<Task[] | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
+  const [allTasks, setAllTasks] = useState<Task[] | null>(null)
+  const [showAll, setShowAll] = useState(false)
+  const [totalWorkable, setTotalWorkable] = useState<number | null>(null)
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -62,10 +66,22 @@ export default function HerDashboardClient({
     if (listRes.ok) {
       const next = await listRes.json() as Task[]
       setTasks(next)
+      const total = listRes.headers.get('x-workable')
+      if (total) setTotalWorkable(Number(total))
+      if (allTasks !== null) {
+        const allRes = await fetch('/api/tasks?all=1')
+        if (allRes.ok) setAllTasks(await allRes.json() as Task[])
+      }
       await refreshBlocked()
       return next
     }
     return tasks
+  }
+
+  async function loadAllTasks() {
+    const res = await fetch('/api/tasks?all=1')
+    if (res.ok) setAllTasks(await res.json() as Task[])
+    setShowAll(true)
   }
 
   async function refreshBlocked() {
@@ -168,95 +184,55 @@ export default function HerDashboardClient({
 
       <div className="max-w-lg mx-auto px-5 py-5 space-y-4 pb-28">
 
-        {/* Tabs */}
-        <div className="flex gap-1 rounded-2xl p-1" style={{ backgroundColor: '#e4ede4' }}>
-          {([
-            { key: 'tasks',     label: 'My Tasks' },
-            { key: 'blocked',   label: `Blocked${blockedTasks.length > 0 ? ` (${blockedTasks.length})` : ''}` },
-            { key: 'inventory', label: 'Inventory' },
-            { key: 'calendar',  label: 'Calendar' },
-          ] as { key: Tab; label: string }[]).map(({ key, label }) => (
-            <button key={key} onClick={() => setTab(key)}
-              className="flex-1 text-sm font-semibold rounded-xl transition-all"
-              style={{
-                backgroundColor: tab === key ? '#fff' : 'transparent',
-                color: tab === key ? (key === 'blocked' ? '#c0607a' : '#2d4a30') : (key === 'blocked' && blockedTasks.length > 0 ? '#c0607a' : '#9db89f'),
-                minHeight: 44,
-                boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                fontSize: 13,
-              }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
         {tab === 'tasks' && (
           <>
+            {/* Top 5 priority tasks */}
             {tasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 space-y-2">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ backgroundColor: '#e8f4e8' }}>
-                  ✓
-                </div>
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ backgroundColor: '#e8f4e8' }}>✓</div>
                 <p className="font-semibold text-base" style={{ color: '#2d4a30' }}>All caught up!</p>
                 <p className="text-sm text-center" style={{ color: '#b8d0ba' }}>No tasks right now. Enjoy the moment.</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {groupTasksByMonth(tasks).map(group => {
-                  const isMonthCollapsed = collapsedMonths.has(group.key)
-                  const todayMonth = new Date().toISOString().slice(0, 7)
-                  const isCurrent = group.key === todayMonth
-                  const doneCount = group.tasks.filter(t => t.status === 'done').length
-                  const pct = group.tasks.length > 0 ? Math.round((doneCount / group.tasks.length) * 100) : 0
-                  return (
-                    <div key={group.key} className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#fff', border: '1px solid #e4ede4' }}>
-                      <button
-                        onClick={() => setCollapsedMonths(prev => {
-                          const next = new Set(prev)
-                          if (next.has(group.key)) next.delete(group.key)
-                          else next.add(group.key)
-                          return next
-                        })}
-                        className="w-full px-4 pt-3.5 pb-3 text-left"
-                        style={{ WebkitTapHighlightColor: 'transparent' }}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="font-semibold text-sm flex-1 text-left" style={{ color: '#2d4a30' }}>
-                            {group.label}
-                          </span>
-                          {isCurrent && (
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>
-                              This month
-                            </span>
-                          )}
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full tabular-nums shrink-0" style={{ backgroundColor: '#e8f0e8', color: '#7a9e7e' }}>
-                            {doneCount}/{group.tasks.length}
-                          </span>
-                          <svg
-                            width="18" height="18" viewBox="0 0 18 18" fill="none"
-                            style={{ color: '#b8d0ba', transform: isMonthCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }}
-                          >
-                            <path d="M4.5 7l4.5 4.5L13.5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </div>
-                        <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ backgroundColor: '#e4ede4' }}>
-                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#7a9e7e' : '#e6c84a' }} />
-                        </div>
-                      </button>
-                      {!isMonthCollapsed && (
-                        <div className="px-2 pb-2 pt-1 space-y-2" style={{ borderTop: '1px solid #f0f4f0' }}>
-                          {group.tasks.map(task => (
-                            <HerTaskCard
-                              key={task.id}
-                              task={task}
-                              onDetail={() => setDetailTask(task)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+                <div className="flex items-center justify-between px-1 pb-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Top priority</p>
+                  {totalWorkable !== null && totalWorkable > tasks.length && (
+                    <span className="text-xs" style={{ color: '#b8d0ba' }}>{tasks.length} of {totalWorkable}</span>
+                  )}
+                </div>
+                {tasks.map(task => (
+                  <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
+                ))}
+              </div>
+            )}
+
+            {/* See all remaining tasks */}
+            {(totalWorkable ?? 0) > tasks.length && (
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    if (!showAll && allTasks === null) loadAllTasks()
+                    else setShowAll(v => !v)
+                  }}
+                  className="w-full flex items-center justify-between px-1 py-2"
+                >
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>
+                    All tasks {totalWorkable !== null && `(${totalWorkable})`}
+                  </span>
+                  <span className="text-xs" style={{ color: '#b8d0ba' }}>{showAll ? '▲' : '▼'}</span>
+                </button>
+                {showAll && (
+                  <div className="space-y-2 mt-1">
+                    {allTasks === null ? (
+                      <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Loading...</p>
+                    ) : (
+                      allTasks.slice(tasks.length).map(task => (
+                        <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -269,12 +245,9 @@ export default function HerDashboardClient({
                 }}
                 className="w-full flex items-center justify-between px-1 py-2"
               >
-                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>
-                  Completed
-                </span>
+                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Completed</span>
                 <span className="text-xs" style={{ color: '#b8d0ba' }}>{showCompleted ? '▲' : '▼'}</span>
               </button>
-
               {showCompleted && (
                 <div className="space-y-2 mt-1">
                   {completedTasks === null ? (
@@ -319,6 +292,8 @@ export default function HerDashboardClient({
 
         {tab === 'inventory' && <InventoryList isAdmin={false} />}
 
+        {tab === 'timeline' && <Timeline tasks={tasks} />}
+
         {tab === 'calendar' && (
           <Calendar tasks={[]} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
         )}
@@ -328,7 +303,7 @@ export default function HerDashboardClient({
       {tab === 'tasks' && (
         <button
           onClick={() => setShowAdd(true)}
-          className="fixed bottom-8 right-5 w-11 h-11 rounded-full text-white text-xl flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10"
+          className="fixed right-5 w-11 h-11 rounded-full text-white text-xl flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10 fab-above-nav"
           style={{ backgroundColor: '#d4849a', boxShadow: '0 4px 16px rgba(212,132,154,0.4)' }}
         >
           +
@@ -379,6 +354,58 @@ export default function HerDashboardClient({
           }
         }} />
       )}
+
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-20 bg-white" style={{ borderTop: '1px solid #e4ede4' }}>
+        <div className="flex items-center justify-around max-w-lg mx-auto" style={{ paddingTop: 8, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+          {/* Tasks */}
+          <button onClick={() => setTab('tasks')} style={{ color: tab === 'tasks' ? '#2d4a30' : '#c8dcc8', width: 56, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4"/>
+            </svg>
+          </button>
+          {/* Inventory */}
+          <button onClick={() => setTab('inventory')} style={{ color: tab === 'inventory' ? '#2d4a30' : '#c8dcc8', width: 56, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          </button>
+          {/* Timeline */}
+          <button onClick={() => setTab('timeline')} style={{ color: tab === 'timeline' ? '#2d4a30' : '#c8dcc8', width: 56, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <circle cx="7" cy="12" r="2.5"/>
+              <circle cx="15" cy="12" r="2.5"/>
+              <line x1="7" y1="9.5" x2="7" y2="5"/>
+              <line x1="15" y1="9.5" x2="15" y2="5"/>
+            </svg>
+          </button>
+          {/* Calendar */}
+          <button onClick={() => setTab('calendar')} style={{ color: tab === 'calendar' ? '#2d4a30' : '#c8dcc8', width: 56, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </button>
+          {/* Blocked */}
+          <button onClick={() => setTab('blocked')} style={{ color: tab === 'blocked' ? '#c0607a' : (blockedTasks.length > 0 ? '#c0607a' : '#c8dcc8'), width: 56, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            {blockedTasks.length > 0 && (
+              <span className="absolute top-1 right-1 text-white rounded-full font-bold" style={{ fontSize: 9, backgroundColor: '#c0607a', minWidth: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                {blockedTasks.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </nav>
     </div>
   )
 }
@@ -451,9 +478,12 @@ function HerTaskCard({ task, onDetail }: {
             style={{ color: isDone ? '#b8d0ba' : '#2d4a30' }}>
             {task.title}
           </p>
-          {task.due_date && (
+          {(task.category || task.due_date) && (
             <p className="text-sm mt-1" style={{ color: '#b8d0ba' }}>
-              Due {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {[
+                task.category,
+                task.due_date && `Due ${new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+              ].filter(Boolean).join(' · ')}
             </p>
           )}
         </div>
@@ -479,6 +509,7 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
     title: '',
     description: '',
     status: 'pending' as Task['status'],
+    category: '',
     due_date: '',
     responsible_party: '',
     important_contacts: '',
@@ -493,6 +524,7 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
       title: task.title ?? '',
       description: task.description ?? '',
       status: task.status,
+      category: task.category ?? '',
       due_date: task.due_date ?? '',
       responsible_party: task.responsible_party ?? '',
       important_contacts: task.important_contacts ?? '',
@@ -516,6 +548,7 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
       title: editFields.title,
       description: editFields.description,
       status: editFields.status,
+      category: editFields.category,
       due_date: editFields.due_date || null,
       responsible_party: editFields.responsible_party,
       important_contacts: editFields.important_contacts,
@@ -592,6 +625,16 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
               />
               <div className="space-y-2">
                 <div>
+                  <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Category</p>
+                  <input
+                    value={editFields.category}
+                    onChange={e => setEditFields(f => ({ ...f, category: e.target.value }))}
+                    placeholder="e.g. Flowers, Venue…"
+                    className="w-full rounded-2xl px-3 py-2.5 text-sm focus:outline-none"
+                    style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+                  />
+                </div>
+                <div>
                   <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Due date</p>
                   <input
                     type="date"
@@ -660,8 +703,20 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
               )}
 
               {/* Meta chips */}
-              {(task.due_date || task.completed_date || task.responsible_party || task.important_contacts) && (
+              {(task.category || task.due_date || task.completed_date || task.responsible_party || task.important_contacts || task.created_by) && (
                 <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Category</p>
+                      <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{task.category || '—'}</p>
+                    </div>
+                    {task.created_by && (
+                      <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Created by</p>
+                        <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{task.created_by}</p>
+                      </div>
+                    )}
+                  </div>
                   {task.due_date && (
                     <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
                       <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Due date</p>

@@ -25,6 +25,8 @@ import PushManagerInline from '@/components/PushManagerInline'
 import InventoryList from '@/components/InventoryList'
 import NotificationCenter from '@/components/NotificationCenter'
 import InventoryReview from '@/components/InventoryReview'
+import Timeline from '@/components/Timeline'
+import AddToTimelineSheet from '@/components/AddToTimelineSheet'
 
 const STATUS_BAR: Record<string, string> = {
   done:        '#7a9e7e',  // green
@@ -68,7 +70,7 @@ const PRIORITY_STYLE: Record<string, { bg: string; color: string }> = {
 }
 
 type Filter = string
-type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify'
+type Tab = 'tasks' | 'completed' | 'review' | 'calendar' | 'inventory' | 'notify' | 'timeline'
 
 // Custom checkbox — native unchecked checkboxes render near-invisible on iOS Safari.
 function Checkbox({ checked, onChange }: { checked: boolean; onChange?: () => void }) {
@@ -77,7 +79,7 @@ function Checkbox({ checked, onChange }: { checked: boolean; onChange?: () => vo
       <input
         type="checkbox"
         checked={checked}
-        onChange={onChange}
+        onChange={onChange ?? (() => {})}
         className="absolute inset-0 cursor-pointer"
         style={{ width: 24, height: 24, opacity: 0 }}
       />
@@ -352,33 +354,13 @@ export default function DashboardClient({
         </div>
       </header>
 
-      <div className={`mx-auto px-4 sm:px-6 py-4 sm:py-6 ${tab === 'tasks' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+      <div className={`mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-24 ${tab === 'tasks' ? 'max-w-7xl' : 'max-w-5xl'}`}>
 
         {/* Two-column layout on lg+ */}
         <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
 
           {/* Left: tasks (full width on mobile, 2/3 on lg, full on lg for board) */}
           <div className={`space-y-4 ${tab === 'tasks' ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
-            {/* Tabs — scrollable so all tabs are always reachable on small screens */}
-            <div className="flex gap-1 rounded-xl p-1 overflow-x-auto no-scrollbar" style={{ backgroundColor: '#d8e8d8', WebkitOverflowScrolling: 'touch' }}>
-              {([
-                { key: 'tasks',     label: 'Active' },
-                { key: 'completed', label: 'Done' },
-                { key: 'review',    label: `Review${(reviewTasks.length + uncatInventoryCount) ? ` (${reviewTasks.length + uncatInventoryCount})` : ''}` },
-                { key: 'inventory', label: 'Inventory' },
-                ...(user.id === 'nick' ? [{ key: 'notify', label: 'Notify' }] : []),
-                { key: 'calendar',  label: 'Calendar', lgHide: true },
-              ] as { key: Tab; label: string; lgHide?: boolean; mobileHide?: boolean }[]).map(({ key, label, lgHide, mobileHide }) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  className={`shrink-0 text-sm font-medium rounded-lg transition-colors ${lgHide ? 'lg:hidden' : ''} ${mobileHide ? 'hidden lg:inline-block' : ''}`}
-                  style={{ backgroundColor: tab === key ? '#fff' : 'transparent', color: tab === key ? '#2d4a30' : '#7a9e7e', minHeight: 44, minWidth: 72, padding: '0 12px' }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
 
             {/* Task list */}
             {(tab === 'tasks' || tab === 'completed') && (
@@ -616,6 +598,9 @@ export default function DashboardClient({
             {/* Inventory */}
             {tab === 'inventory' && <InventoryList isAdmin={true} />}
 
+            {/* Timeline */}
+            {tab === 'timeline' && <Timeline tasks={tasks} />}
+
             {/* Notify Siobhan */}
             {tab === 'notify' && <NotifyTab />}
 
@@ -687,9 +672,9 @@ export default function DashboardClient({
       )}
 
       {/* FAB — mobile only (desktop has header button), hidden on inventory/notify tabs */}
-      {tab !== 'inventory' && tab !== 'notify' && !selectMode && <button
+      {tab !== 'inventory' && tab !== 'notify' && tab !== 'timeline' && !selectMode && <button
         onClick={() => setShowCreate(true)}
-        className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom sm:hidden"
+        className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-above-nav"
         style={{ backgroundColor: '#d4849a' }}
       >
         +
@@ -773,6 +758,73 @@ export default function DashboardClient({
           onConfirm={() => { confirmState.onConfirm(); setConfirmState(null) }}
         />
       )}
+
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-20 bg-white" style={{ borderTop: '1px solid #e4ede4' }}>
+        <div className="flex items-center justify-around max-w-7xl mx-auto" style={{ paddingTop: 8, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+          {/* Tasks */}
+          <button onClick={() => setTab('tasks')} style={{ color: tab === 'tasks' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4"/>
+            </svg>
+          </button>
+          {/* Inventory */}
+          <button onClick={() => setTab('inventory')} style={{ color: tab === 'inventory' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          </button>
+          {/* Timeline */}
+          <button onClick={() => setTab('timeline')} style={{ color: tab === 'timeline' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <circle cx="7" cy="12" r="2.5"/>
+              <circle cx="15" cy="12" r="2.5"/>
+              <line x1="7" y1="9.5" x2="7" y2="5"/>
+              <line x1="15" y1="9.5" x2="15" y2="5"/>
+            </svg>
+          </button>
+          {/* Review */}
+          <button onClick={() => setTab('review')} style={{ color: tab === 'review' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            {(reviewTasks.length + uncatInventoryCount) > 0 && (
+              <span className="absolute top-1 right-3 text-white rounded-full font-bold" style={{ fontSize: 9, backgroundColor: '#d4849a', minWidth: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                {reviewTasks.length + uncatInventoryCount}
+              </span>
+            )}
+          </button>
+          {/* Done */}
+          <button onClick={() => setTab('completed')} style={{ color: tab === 'completed' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </button>
+          {/* Calendar */}
+          <button onClick={() => setTab('calendar')} style={{ color: tab === 'calendar' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </button>
+          {/* Notify (nick only) */}
+          {user.id === 'nick' && (
+            <button onClick={() => setTab('notify')} style={{ color: tab === 'notify' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 01-3.46 0"/>
+              </svg>
+            </button>
+          )}
+        </div>
+      </nav>
     </div>
   )
 }
@@ -989,9 +1041,12 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
             </span>
           </div>
           <p className="font-medium text-sm leading-snug" style={{ color: '#2d4a30' }}>{task.title}</p>
-          {task.due_date && (
+          {(task.category || task.due_date) && (
             <p className="text-xs mt-0.5" style={{ color: '#b8d0ba' }}>
-              Due {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {[
+                task.category,
+                task.due_date && `Due ${new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+              ].filter(Boolean).join(' · ')}
             </p>
           )}
         </div>
@@ -1055,6 +1110,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle')
   const [showShareCompose, setShowShareCompose] = useState(false)
   const [shareNote, setShareNote] = useState(task.share_note ?? '')
+  const [showAddTimeline, setShowAddTimeline] = useState(false)
 
   async function doShare(note: string) {
     setShareState('loading')
@@ -1191,8 +1247,10 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
               />
             </div>
             {[
+              { label: 'Category', value: task.category || '—' },
               { label: 'Assigned', value: assigneeLabel(task.assigned_to) },
               task.due_date ? { label: 'Due', value: new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) } : null,
+              task.created_by ? { label: 'Created by', value: task.created_by } : null,
               task.completed_date ? { label: 'Completed', value: new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) } : null,
               task.completed_by ? { label: 'Completed by', value: task.completed_by } : null,
               task.responsible_party ? { label: 'Responsible', value: task.responsible_party } : null,
@@ -1250,6 +1308,15 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
 
         {/* Sticky footer actions — always reachable, safe-area aware */}
         <div className="shrink-0 p-4 sm:p-5 modal-bottom" style={{ borderTop: '1px solid #d8e8d8' }}>
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => setShowAddTimeline(true)}
+              className="flex-1 min-w-0 text-sm font-medium rounded-xl px-1 leading-tight flex items-center justify-center gap-1"
+              style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Timeline
+            </button>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => {
@@ -1322,6 +1389,15 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
           </div>
         </div>
       </div>
+    )}
+
+    {showAddTimeline && (
+      <AddToTimelineSheet
+        title={task.title}
+        taskId={task.id}
+        type="task"
+        onClose={() => setShowAddTimeline(false)}
+      />
     )}
     </>
   )

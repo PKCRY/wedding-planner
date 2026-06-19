@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const wantCompleted = searchParams.get('completed') === '1'
   const wantBlocked = searchParams.get('blocked') === '1'
+  const wantAll = searchParams.get('all') === '1'
   const memberId = session.user.id
 
   const query = supabase.from('tasks').select('*')
@@ -47,11 +48,13 @@ export async function GET(req: NextRequest) {
 
   if (wantCompleted) return NextResponse.json(done)
   if (wantBlocked) return NextResponse.json(blocked)
+  if (wantAll) return NextResponse.json(workable)
 
   const res = NextResponse.json(workable.slice(0, TOP_N))
   res.headers.set('x-total', String(sorted.length))
   res.headers.set('x-done', String(done.length))
   res.headers.set('x-blocked', String(blocked.length))
+  res.headers.set('x-workable', String(workable.length))
   return res
 }
 

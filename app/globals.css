@@ -29,6 +29,11 @@ input, select, textarea {
   bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
 }
 
+/* FAB above bottom nav bar */
+.fab-above-nav {
+  bottom: calc(60px + max(8px, env(safe-area-inset-bottom)) + 14px);
+}
+
 /* Modal safe area — only on mobile */
 .modal-bottom {
   padding-bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));

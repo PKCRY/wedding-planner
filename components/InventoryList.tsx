@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import AddToTimelineSheet from '@/components/AddToTimelineSheet'
 import {
   DndContext,
   closestCenter,
@@ -39,7 +40,7 @@ const STATUS_TEXT: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   needed:   'Still Need',
-  partial:  'Partially Complete',
+  partial:  'In Progress',
   acquired: 'Done',
 }
 
@@ -148,6 +149,25 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  async function renameCategory(id: number, oldName: string, newName: string, updateItems: boolean) {
+    const res = await fetch(`/api/inventory/categories/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName, updateItems }),
+    })
+    if (!res.ok) return
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c))
+    if (updateItems) {
+      setItems(prev => prev.map(i => i.category === oldName ? { ...i, category: newName } : i))
+    }
+  }
+
+  async function deleteCategory(id: number) {
+    const res = await fetch(`/api/inventory/categories/${id}`, { method: 'DELETE' })
+    if (!res.ok) return
+    setCategories(prev => prev.filter(c => c.id !== id))
+  }
+
   function toggleCategory(key: string) {
     setCollapsedCategories(prev => {
       const next = new Set(prev)
@@ -178,6 +198,10 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const allCategoryNames = categories.map(c => c.name).sort()
+  const itemCounts: Record<string, number> = {}
+  for (const cat of allCategoryNames) {
+    itemCounts[cat] = items.filter(i => i.category === cat).length
+  }
 
   const hasUncategorized = items.some(i => !i.category)
   const allCategoryKeys = [...allCategoryNames, ...(hasUncategorized ? ['__none__'] : [])]
@@ -331,7 +355,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       {/* FAB */}
       <button
         onClick={() => { setAddDefaultCategory(''); setShowAdd(true) }}
-        className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-bottom"
+        className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-above-nav"
         style={{ backgroundColor: '#7a9e7e' }}
       >
         +
@@ -342,8 +366,11 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         <ItemModal
           item={editItem}
           isAdmin={isAdmin}
-          allCategories={allCategoryNames}
+          allCategories={categories}
+          itemCounts={itemCounts}
           onCreateCategory={createCategory}
+          onRenameCategory={renameCategory}
+          onDeleteCategory={deleteCategory}
           onClose={() => setEditItem(null)}
           onSave={async data => { await saveItem(editItem.id, data); setEditItem(null) }}
           onDelete={async () => { await deleteItem(editItem.id); setEditItem(null) }}
@@ -354,9 +381,12 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       {showAdd && (
         <ItemModal
           isAdmin={isAdmin}
-          allCategories={allCategoryNames}
+          allCategories={categories}
+          itemCounts={itemCounts}
           defaultCategory={addDefaultCategory}
           onCreateCategory={createCategory}
+          onRenameCategory={renameCategory}
+          onDeleteCategory={deleteCategory}
           onClose={() => setShowAdd(false)}
           onSave={async data => { await saveItem(null, data); setShowAdd(false) }}
         />
@@ -392,7 +422,14 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
       className="relative bg-white rounded-2xl overflow-hidden cursor-pointer"
       style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #e4ede4', userSelect: 'none', WebkitUserSelect: 'none' }}
     >
-      <div className="pl-4 pr-4 py-3.5 flex items-center gap-3">
+      <div className="pl-3 pr-4 py-3.5 flex items-center gap-3">
+        <button
+          onClick={e => { e.stopPropagation(); onCycle() }}
+          className="text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap shrink-0"
+          style={{ minHeight: 36, backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status], minWidth: 80, textAlign: 'center' }}
+        >
+          {STATUS_LABEL[item.status]}
+        </button>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-[15px] leading-snug" style={{ color: '#2d4a30' }}>{item.name}</p>
           {(item.quantity || item.quantity_have || item.responsible_party) && (
@@ -410,13 +447,6 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={e => { e.stopPropagation(); onCycle() }}
-            className="text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap"
-            style={{ minHeight: 44, backgroundColor: STATUS_BG[item.status], color: STATUS_TEXT[item.status] }}
-          >
-            {STATUS_LABEL[item.status]}
-          </button>
           {dragHandle && (
             <button
               {...dragHandle}
@@ -450,12 +480,15 @@ function ItemCard({ item, isAdmin, onCycle, onEdit, dragHandle }: ItemCardProps)
   )
 }
 
-function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreateCategory, onClose, onSave, onDelete }: {
+function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory = '', onCreateCategory, onRenameCategory, onDeleteCategory, onClose, onSave, onDelete }: {
   item?: InventoryItem
   isAdmin: boolean
-  allCategories: string[]
+  allCategories: InventoryCategory[]
+  itemCounts: Record<string, number>
   defaultCategory?: string
   onCreateCategory?: (name: string) => Promise<void>
+  onRenameCategory?: (id: number, oldName: string, newName: string, updateItems: boolean) => Promise<void>
+  onDeleteCategory?: (id: number) => Promise<void>
   onClose: () => void
   onSave: (data: Partial<InventoryItem>) => Promise<void>
   onDelete?: () => Promise<void>
@@ -471,6 +504,9 @@ function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreat
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [categorySheetOpen, setCategorySheetOpen] = useState(false)
+  const [showAddTimeline, setShowAddTimeline] = useState(false)
+
+  const allCategoryNames = allCategories.map(c => c.name).sort()
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -522,17 +558,20 @@ function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreat
           />
 
           {/* Category */}
-          <button
-            type="button"
-            onClick={() => setCategorySheetOpen(true)}
-            className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between focus:outline-none text-sm"
-            style={{ border: '1px solid #d8e8d8', color: category ? '#2d4a30' : '#9db89f', backgroundColor: '#f5f7f5' }}
-          >
-            <span>{category || 'Select or create category…'}</span>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f', flexShrink: 0 }}>
-              <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: '#b8d0ba' }}>Category</p>
+            <button
+              type="button"
+              onClick={() => setCategorySheetOpen(true)}
+              className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between focus:outline-none text-sm"
+              style={{ border: '1px solid #d8e8d8', color: category ? '#2d4a30' : '#9db89f', backgroundColor: '#f5f7f5' }}
+            >
+              <span>{category || 'Select or create category…'}</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f', flexShrink: 0 }}>
+                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
 
           <div className="flex gap-2">
             <input
@@ -557,7 +596,7 @@ function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreat
             style={{ border: '1px solid #d8e8d8', backgroundColor: STATUS_BG[status], color: STATUS_TEXT[status] }}
           >
             <option value="needed">Still Need</option>
-            <option value="partial">Partially Complete</option>
+            <option value="partial">In Progress</option>
             <option value="acquired">Done</option>
           </select>
           <div className="flex gap-2">
@@ -595,6 +634,18 @@ function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreat
             {saving ? 'Saving...' : item ? 'Save Changes' : 'Add Item'}
           </button>
 
+          {item && (
+            <button
+              type="button"
+              onClick={() => setShowAddTimeline(true)}
+              className="w-full rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
+              style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 48 }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Add to Timeline
+            </button>
+          )}
+
           {onDelete && (
             confirmDelete ? (
               <div className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: '#fce8ef', border: '1px solid #f0b8c8' }}>
@@ -626,10 +677,22 @@ function ItemModal({ item, isAdmin, allCategories, defaultCategory = '', onCreat
       {categorySheetOpen && (
         <CategoryPickerSheet
           categories={allCategories}
+          itemCounts={itemCounts}
           value={category}
           onSelect={cat => { setCategory(cat); setCategorySheetOpen(false) }}
           onCreateCategory={onCreateCategory}
+          onRenameCategory={onRenameCategory}
+          onDeleteCategory={onDeleteCategory}
           onClose={() => setCategorySheetOpen(false)}
+        />
+      )}
+
+      {showAddTimeline && item && (
+        <AddToTimelineSheet
+          title={item.name}
+          inventoryId={item.id}
+          type="inventory"
+          onClose={() => setShowAddTimeline(false)}
         />
       )}
     </div>
@@ -643,16 +706,25 @@ const SUGGESTED_CATEGORIES = [
   'Jewellery', 'Cake', 'Gifts', 'Lighting',
 ]
 
-function CategoryPickerSheet({ categories, value, onSelect, onCreateCategory, onClose }: {
-  categories: string[]
+function CategoryPickerSheet({ categories, itemCounts, value, onSelect, onCreateCategory, onRenameCategory, onDeleteCategory, onClose }: {
+  categories: InventoryCategory[]
+  itemCounts: Record<string, number>
   value: string
   onSelect: (cat: string) => void
   onCreateCategory?: (name: string) => Promise<void>
+  onRenameCategory?: (id: number, oldName: string, newName: string, updateItems: boolean) => Promise<void>
+  onDeleteCategory?: (id: number) => Promise<void>
   onClose: () => void
 }) {
   const [newCatText, setNewCatText] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [updateItems, setUpdateItems] = useState(true)
+  const [editSaving, setEditSaving] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
-  const suggestions = SUGGESTED_CATEGORIES.filter(s => !categories.includes(s))
+  const categoryNames = categories.map(c => c.name)
+  const suggestions = SUGGESTED_CATEGORIES.filter(s => !categoryNames.includes(s))
 
   async function handleAdd() {
     const trimmed = newCatText.trim()
@@ -662,12 +734,42 @@ function CategoryPickerSheet({ categories, value, onSelect, onCreateCategory, on
     onSelect(trimmed)
   }
 
+  function startEdit(cat: InventoryCategory) {
+    setEditingId(cat.id)
+    setEditName(cat.name)
+    setUpdateItems(true)
+    setConfirmDeleteId(null)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditName('')
+    setConfirmDeleteId(null)
+  }
+
+  async function saveEdit(cat: InventoryCategory) {
+    const trimmed = editName.trim()
+    if (!trimmed || trimmed === cat.name) { cancelEdit(); return }
+    setEditSaving(true)
+    await onRenameCategory?.(cat.id, cat.name, trimmed, updateItems)
+    setEditSaving(false)
+    setEditingId(null)
+    if (value === cat.name) onSelect(trimmed)
+  }
+
+  async function handleDelete(cat: InventoryCategory) {
+    await onDeleteCategory?.(cat.id)
+    setConfirmDeleteId(null)
+    setEditingId(null)
+    if (value === cat.name) onSelect('')
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-end justify-center z-[60]"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-t-3xl w-full max-w-lg shadow-2xl flex flex-col" style={{ maxHeight: '70vh' }}>
+      <div className="bg-white rounded-t-3xl w-full max-w-lg shadow-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
         <div className="flex justify-center pt-2.5 pb-1 shrink-0">
           <div className="w-9 h-1.5 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
         </div>
@@ -678,19 +780,16 @@ function CategoryPickerSheet({ categories, value, onSelect, onCreateCategory, on
         </div>
 
         <div className="overflow-y-auto flex-1">
-          {/* Suggested categories (only ones not already created) */}
+          {/* Suggestions */}
           {suggestions.length > 0 && (
             <div className="px-4 pt-2 pb-3" style={{ borderBottom: '1px solid #f0f4f0' }}>
               <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Suggestions</p>
               <div className="flex flex-wrap gap-2">
                 {suggestions.map(s => (
-                  <button
-                    key={s}
-                    type="button"
+                  <button key={s} type="button"
                     onClick={async () => { await onCreateCategory?.(s); onSelect(s) }}
                     className="text-sm font-medium rounded-full px-3 py-1 transition-colors"
-                    style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}
-                  >
+                    style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}>
                     {s}
                   </button>
                 ))}
@@ -700,38 +799,120 @@ function CategoryPickerSheet({ categories, value, onSelect, onCreateCategory, on
 
           {/* Clear option */}
           {value && (
-            <button
-              type="button"
-              onClick={() => onSelect('')}
+            <button type="button" onClick={() => onSelect('')}
               className="w-full flex items-center justify-between px-5 text-sm"
-              style={{ minHeight: 52, color: '#c0607a', borderTop: '1px solid #f0f4f0' }}
-            >
+              style={{ minHeight: 52, color: '#c0607a', borderTop: '1px solid #f0f4f0' }}>
               <span>No category</span>
             </button>
           )}
 
-          {categories.map((cat, i) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => onSelect(cat)}
-              className="w-full flex items-center justify-between px-5 text-sm"
-              style={{
-                minHeight: 52,
-                color: value === cat ? '#7a9e7e' : '#2d4a30',
-                fontWeight: value === cat ? 600 : 400,
-                borderTop: '1px solid #f0f4f0',
-              }}
-            >
-              <span>{cat}</span>
-              {value === cat && (
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <path d="M3.75 9l3.75 3.75 6.75-7.5" stroke="#7a9e7e" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </button>
-          ))}
+          {/* Category rows */}
+          {categories.map(cat => {
+            const isEditing = editingId === cat.id
+            const nameChanged = editName.trim() !== cat.name && editName.trim() !== ''
+            const count = itemCounts[cat.name] ?? 0
 
+            if (isEditing) {
+              return (
+                <div key={cat.id} className="px-4 py-3 space-y-2" style={{ borderTop: '1px solid #f0f4f0', backgroundColor: '#fafcfa' }}>
+                  <input
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(cat); if (e.key === 'Escape') cancelEdit() }}
+                    autoFocus
+                    className="w-full rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none"
+                    style={{ border: '1px solid #b8d0ba', color: '#2d4a30', backgroundColor: '#fff' }}
+                  />
+
+                  {nameChanged && count > 0 && (
+                    <button type="button" onClick={() => setUpdateItems(v => !v)}
+                      className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs text-left"
+                      style={{ border: '1px solid #e4ede4', backgroundColor: '#fff' }}>
+                      <span className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: updateItems ? '#7a9e7e' : '#fff', border: updateItems ? 'none' : '2px solid #b8d0ba' }}>
+                        {updateItems && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      <span style={{ color: '#5a7d5e' }}>
+                        Also rename {count} item{count !== 1 ? 's' : ''}
+                      </span>
+                    </button>
+                  )}
+
+                  {confirmDeleteId === cat.id ? (
+                    <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: '#fce8ef', border: '1px solid #f0b8c8' }}>
+                      <p className="text-xs font-semibold text-center" style={{ color: '#2d4a30' }}>
+                        Delete "{cat.name}"?{count > 0 ? ` ${count} item${count !== 1 ? 's' : ''} become uncategorized.` : ''}
+                      </p>
+                      <div className="flex gap-2">
+                        <button onClick={() => setConfirmDeleteId(null)}
+                          className="flex-1 rounded-xl text-xs font-semibold"
+                          style={{ backgroundColor: '#fff', color: '#9db89f', minHeight: 36, border: '1px solid #e4ede4' }}>
+                          Cancel
+                        </button>
+                        <button onClick={() => handleDelete(cat)}
+                          className="flex-1 rounded-xl text-xs font-semibold text-white"
+                          style={{ backgroundColor: '#c0607a', minHeight: 36 }}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={cancelEdit}
+                        className="rounded-xl px-3 text-xs font-semibold"
+                        style={{ backgroundColor: '#f0f4f0', color: '#9db89f', minHeight: 36 }}>
+                        Cancel
+                      </button>
+                      <button onClick={() => saveEdit(cat)} disabled={editSaving}
+                        className="flex-1 rounded-xl text-xs font-semibold text-white"
+                        style={{ backgroundColor: '#7a9e7e', opacity: editSaving ? 0.5 : 1, minHeight: 36 }}>
+                        {editSaving ? 'Saving…' : 'Save'}
+                      </button>
+                      {onDeleteCategory && (
+                        <button onClick={() => setConfirmDeleteId(cat.id)}
+                          className="rounded-xl px-3 text-xs font-semibold"
+                          style={{ backgroundColor: '#fce8ef', color: '#c0607a', minHeight: 36 }}>
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            return (
+              <div key={cat.id} className="flex items-center" style={{ borderTop: '1px solid #f0f4f0' }}>
+                <button type="button" onClick={() => onSelect(cat.name)}
+                  className="flex-1 flex items-center justify-between px-5 text-sm"
+                  style={{ minHeight: 52, color: value === cat.name ? '#7a9e7e' : '#2d4a30', fontWeight: value === cat.name ? 600 : 400 }}>
+                  <span>{cat.name}</span>
+                  {value === cat.name && (
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                      <path d="M3.75 9l3.75 3.75 6.75-7.5" stroke="#7a9e7e" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+                {onRenameCategory && (
+                  <button type="button" onClick={() => startEdit(cat)}
+                    className="flex items-center justify-center gap-1 pr-4 pl-1 shrink-0 text-xs font-medium"
+                    style={{ color: '#9db89f', minHeight: 52 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Edit
+                  </button>
+                )}
+              </div>
+            )
+          })}
+
+          {/* New category */}
           <div style={{ borderTop: '1px solid #d8e8d8' }}>
             <div className="px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>New category</p>
@@ -744,13 +925,9 @@ function CategoryPickerSheet({ categories, value, onSelect, onCreateCategory, on
                   className="flex-1 rounded-xl px-4 text-sm focus:outline-none"
                   style={{ border: '1px solid #b8d0ba', color: '#2d4a30', minHeight: 48 }}
                 />
-                <button
-                  type="button"
-                  onClick={handleAdd}
-                  disabled={!newCatText.trim()}
+                <button type="button" onClick={handleAdd} disabled={!newCatText.trim()}
                   className="rounded-xl px-5 text-sm font-medium text-white"
-                  style={{ backgroundColor: '#7a9e7e', opacity: newCatText.trim() ? 1 : 0.45, minHeight: 48 }}
-                >
+                  style={{ backgroundColor: '#7a9e7e', opacity: newCatText.trim() ? 1 : 0.45, minHeight: 48 }}>
                   Add
                 </button>
               </div>
