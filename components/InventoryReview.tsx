@@ -9,12 +9,6 @@ const STATUS_COLORS = {
   acquired: { bg: '#e8f4e8', color: '#2d6a30', label: 'Done' },
 }
 
-const SUGGESTED = [
-  'Flowers', 'Decorations', 'Catering', 'Drinks', 'Clothing',
-  'Photography', 'Videography', 'Stationery', 'Entertainment',
-  'Beauty & Hair', 'Favours', 'Transport', 'Venue', 'Accommodation',
-  'Jewellery', 'Cake', 'Gifts', 'Lighting',
-]
 
 export default function InventoryReview() {
   const [allItems, setAllItems] = useState<InventoryItem[]>([])
@@ -25,6 +19,7 @@ export default function InventoryReview() {
   const [dragX, setDragX] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
+  const [showAddItem, setShowAddItem] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Refs for stable touch handling (no stale closure issues)
@@ -45,8 +40,8 @@ export default function InventoryReview() {
     const cats: InventoryCategory[] = catsRes.ok ? await catsRes.json() : []
     setAllItems(items)
     setCategories(cats)
-    const uncategorized = items.filter(i => !i.category?.trim())
-    const categorized = items.filter(i => i.category?.trim() && i.status !== 'acquired')
+    const uncategorized = items.filter(i => !i.categories?.length)
+    const categorized = items.filter(i => i.categories?.length && i.status !== 'acquired')
     setQueue([...uncategorized, ...categorized])
     setLoading(false)
   }
@@ -54,6 +49,13 @@ export default function InventoryReview() {
   function updateItem(updated: InventoryItem) {
     setAllItems(prev => prev.map(i => i.id === updated.id ? updated : i))
     setQueue(prev => prev.map(i => i.id === updated.id ? updated : i))
+  }
+
+  function handleAddItem(item: InventoryItem) {
+    setAllItems(prev => [...prev, item])
+    if (!item.categories?.length || item.status !== 'acquired') {
+      setQueue(prev => [...prev, item])
+    }
   }
 
   const current = queue[index]
@@ -171,8 +173,8 @@ export default function InventoryReview() {
   }
 
   // Category breakdown
-  const uncatCount = allItems.filter(i => !i.category?.trim()).length
-  const catItems = allItems.filter(i => i.category?.trim())
+  const uncatCount = allItems.filter(i => !i.categories?.length).length
+  const catItems = allItems.filter(i => i.categories?.length)
   const catDone = catItems.filter(i => i.status === 'acquired').length
   const catPct = catItems.length > 0 ? Math.round((catDone / catItems.length) * 100) : 0
 
@@ -214,7 +216,14 @@ export default function InventoryReview() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>Item review</p>
-          <span className="text-xs" style={{ color: '#9db89f' }}>{remaining} remaining</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: '#9db89f' }}>{remaining} remaining</span>
+            <button
+              onClick={() => setShowAddItem(true)}
+              className="text-xs font-semibold px-3 py-1 rounded-full"
+              style={{ backgroundColor: '#e8f4e8', color: '#7a9e7e' }}
+            >+ Add</button>
+          </div>
         </div>
 
         {!current ? (
@@ -257,9 +266,11 @@ export default function InventoryReview() {
                 <div className="p-5 flex flex-col justify-between h-full">
                   <div>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {!current.category?.trim()
+                      {!current.categories?.length
                         ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>No category</span>
-                        : <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}>{current.category}</span>
+                        : current.categories.map(cat => (
+                            <span key={cat} className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}>{cat}</span>
+                          ))
                       }
 
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={STATUS_COLORS[current.status]}>
@@ -312,6 +323,15 @@ export default function InventoryReview() {
           </>
         )}
       </div>
+
+      {/* Add item sheet */}
+      {showAddItem && (
+        <AddInventorySheet
+          categories={categories.map(c => c.name)}
+          onClose={() => setShowAddItem(false)}
+          onAdd={handleAddItem}
+        />
+      )}
 
       {/* Edit sheet */}
       {editItem && (
@@ -370,36 +390,58 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
   onDelete: () => Promise<void>
   onCreateCategory: (name: string) => Promise<void>
 }) {
-  const wasUncategorized = !item.category?.trim()
-  const [category, setCategory] = useState(item.category ?? '')
-  const [secondaryCategory, setSecondaryCategory] = useState(item.secondary_category ?? '')
+  const wasUncategorized = !item.categories?.length
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(item.categories ?? [])
   const [status, setStatus] = useState<InventoryItem['status']>(item.status)
-  const [quantityHave, setQuantityHave] = useState(item.quantity_have ?? '')
+  const [addAmount, setAddAmount] = useState('')
   const [quantity, setQuantity] = useState(item.quantity ?? '')
   const [notes, setNotes] = useState(item.notes ?? '')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [newCat, setNewCat] = useState('')
-  const [showCatInput, setShowCatInput] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
+  const [qtyErrors, setQtyErrors] = useState<{ add?: string; total?: string }>({})
 
-  const categoryJustAdded = wasUncategorized && !!category.trim()
+  const currentHave = Number(item.quantity_have) || 0
+  const categoryJustAdded = wasUncategorized && selectedCategories.length > 0
 
-  const suggestions = SUGGESTED.filter(s => !categories.includes(s) && s !== category)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
 
   async function addCategory() {
     const t = newCat.trim()
     if (!t) return
     await onCreateCategory(t)
-    setCategory(t)
+    setSelectedCategories(prev => prev.includes(t) ? prev : [...prev, t])
     setNewCat('')
-    setShowCatInput(false)
+    setShowPicker(false)
   }
 
-  const payload = { category, secondary_category: secondaryCategory, status, quantity_have: quantityHave, quantity, notes }
+  function validateQty(): boolean {
+    const errs: { add?: string; total?: string } = {}
+    if (addAmount !== '' && isNaN(Number(addAmount))) errs.add = 'Must be a number'
+    if (quantity !== '' && isNaN(Number(quantity))) errs.total = 'Must be a number'
+    if (!errs.add && !errs.total && addAmount !== '' && quantity !== '') {
+      const newHave = currentHave + Number(addAmount)
+      if (newHave > Number(quantity)) errs.add = `Total (${newHave}) exceeds needed (${quantity})`
+    }
+    setQtyErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
+  const computedHave = addAmount !== '' && !isNaN(Number(addAmount))
+    ? String(currentHave + Number(addAmount))
+    : (item.quantity_have ?? '')
+  const payload = { categories: selectedCategories, status, quantity_have: computedHave, quantity, notes }
 
   async function submit() {
+    if (!validateQty()) return
     setSaving(true)
-    // Auto-approve when the only reason it was uncategorized is now fixed
+    setSaveError('')
     if (categoryJustAdded) {
       await onSaveAndApprove(payload)
     } else {
@@ -409,7 +451,9 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
   }
 
   async function submitAndApprove() {
+    if (!validateQty()) return
     setSaving(true)
+    setSaveError('')
     await onSaveAndApprove(payload)
     setSaving(false)
   }
@@ -429,97 +473,64 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 pt-4 pb-6 space-y-4">
-          {/* Category */}
+          {/* Categories */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Category</p>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Categories</p>
             <div className="flex flex-wrap gap-2 mb-2">
-              {categories.map(cat => (
+              {selectedCategories.map(cat => (
                 <button
                   key={cat}
                   type="button"
-                  onClick={() => setCategory(cat)}
-                  className="text-sm font-medium rounded-full px-3 py-1.5 transition-colors"
-                  style={{
-                    backgroundColor: category === cat ? '#7a9e7e' : '#e8f0e8',
-                    color: category === cat ? '#fff' : '#5a7d5e',
-                  }}
+                  onClick={() => setSelectedCategories(prev => prev.filter(c => c !== cat))}
+                  className="text-sm font-medium rounded-full px-3 py-1.5 flex items-center gap-1.5"
+                  style={{ backgroundColor: '#7a9e7e', color: '#fff' }}
                 >
-                  {cat}
+                  {cat} <span style={{ opacity: 0.7, fontSize: 15, lineHeight: 1 }}>×</span>
                 </button>
               ))}
-              {category && !categories.includes(category) && (
-                <span className="text-sm font-medium rounded-full px-3 py-1.5" style={{ backgroundColor: '#7a9e7e', color: '#fff' }}>{category}</span>
-              )}
               <button
                 type="button"
-                onClick={() => setShowCatInput(p => !p)}
+                onClick={() => setShowPicker(p => !p)}
                 className="text-sm font-medium rounded-full px-3 py-1.5"
                 style={{ backgroundColor: '#f5f7f5', color: '#9db89f', border: '1px dashed #c8d8c8' }}
               >
-                + New
+                {showPicker ? '− Close' : '+ Add category'}
               </button>
             </div>
 
-            {showCatInput && (
-              <div className="flex gap-2 mb-2">
-                <input
-                  value={newCat}
-                  onChange={e => setNewCat(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && newCat.trim() && addCategory()}
-                  placeholder="Category name"
-                  autoFocus
-                  className="flex-1 min-w-0 rounded-xl px-4 text-sm focus:outline-none"
-                  style={{ border: '1px solid #b8d0ba', color: '#2d4a30', minHeight: 44 }}
-                />
-                <button type="button" onClick={addCategory} disabled={!newCat.trim()}
-                  className="rounded-xl px-4 text-sm font-medium text-white"
-                  style={{ backgroundColor: '#7a9e7e', opacity: newCat.trim() ? 1 : 0.45, minHeight: 44 }}>
-                  Add
-                </button>
-              </div>
-            )}
-
-            {/* Suggestions */}
-            {suggestions.length > 0 && (
-              <div>
-                <p className="text-xs mb-1.5" style={{ color: '#b8d0ba' }}>Suggestions</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {suggestions.slice(0, 8).map(s => (
-                    <button key={s} type="button"
-                      onClick={async () => { await onCreateCategory(s); setCategory(s) }}
-                      className="text-xs font-medium rounded-full px-2.5 py-1"
-                      style={{ backgroundColor: '#f0f4f0', color: '#7a9e7e' }}>
-                      {s}
-                    </button>
-                  ))}
+            {showPicker && (
+              <div className="space-y-2 pt-1">
+                {categories.filter(cat => !selectedCategories.includes(cat)).length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {categories.filter(cat => !selectedCategories.includes(cat)).map(cat => (
+                      <button key={cat} type="button"
+                        onClick={() => setSelectedCategories(prev => [...prev, cat])}
+                        className="text-sm font-medium rounded-full px-3 py-1.5 transition-colors"
+                        style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    value={newCat}
+                    onChange={e => setNewCat(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && newCat.trim() && addCategory()}
+                    placeholder="New category name"
+                    autoFocus
+                    className="flex-1 min-w-0 rounded-xl px-4 text-sm focus:outline-none"
+                    style={{ border: '1px solid #b8d0ba', color: '#2d4a30', minHeight: 44 }}
+                  />
+                  <button type="button" onClick={addCategory} disabled={!newCat.trim()}
+                    className="rounded-xl px-4 text-sm font-medium text-white"
+                    style={{ backgroundColor: '#7a9e7e', opacity: newCat.trim() ? 1 : 0.45, minHeight: 44 }}>
+                    Add
+                  </button>
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Second category */}
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Second category <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></p>
-            <div className="flex flex-wrap gap-2">
-              {categories.map(cat => (
-                <button key={cat} type="button"
-                  onClick={() => setSecondaryCategory(secondaryCategory === cat ? '' : cat)}
-                  className="text-sm font-medium rounded-full px-3 py-1.5 transition-colors"
-                  style={{ backgroundColor: secondaryCategory === cat ? '#4a5a8a' : '#eef0f8', color: secondaryCategory === cat ? '#fff' : '#4a5a8a' }}>
-                  {cat}
-                </button>
-              ))}
-              {secondaryCategory && !categories.includes(secondaryCategory) && (
-                <span className="text-sm font-medium rounded-full px-3 py-1.5" style={{ backgroundColor: '#4a5a8a', color: '#fff' }}>{secondaryCategory}</span>
-              )}
-              {secondaryCategory && (
-                <button type="button" onClick={() => setSecondaryCategory('')}
-                  className="text-sm font-medium rounded-full px-3 py-1.5"
-                  style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}>
-                  Clear
-                </button>
-              )}
-            </div>
           </div>
 
           {/* Status */}
@@ -544,13 +555,29 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Quantity</p>
             <div className="flex gap-2">
-              <input value={quantityHave} onChange={e => setQuantityHave(e.target.value)}
-                placeholder="Have so far" className="flex-1 min-w-0 rounded-2xl px-4 py-3 text-sm focus:outline-none"
-                style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }} />
-              <input value={quantity} onChange={e => setQuantity(e.target.value)}
-                placeholder="Total needed" className="flex-1 min-w-0 rounded-2xl px-4 py-3 text-sm focus:outline-none"
-                style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }} />
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs" style={{ color: '#9db89f' }}>Have: {currentHave}</span>
+                  {addAmount !== '' && !isNaN(Number(addAmount)) && (
+                    <span className="text-xs font-semibold" style={{ color: '#7a9e7e' }}>→ {currentHave + Number(addAmount)}</span>
+                  )}
+                </div>
+                <input value={addAmount} onChange={e => setAddAmount(e.target.value)}
+                  type="number" placeholder="Add amount"
+                  className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none"
+                  style={{ border: `1px solid ${qtyErrors.add ? '#c0607a' : '#d8e8d8'}`, color: '#2d4a30', backgroundColor: '#f5f7f5' }} />
+                {qtyErrors.add && <p className="text-xs" style={{ color: '#c0607a' }}>{qtyErrors.add}</p>}
+              </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <span className="text-xs" style={{ color: '#9db89f' }}>Total needed</span>
+                <input value={quantity} onChange={e => setQuantity(e.target.value)}
+                  type="number" placeholder="e.g. 50"
+                  className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none"
+                  style={{ border: `1px solid ${qtyErrors.total ? '#c0607a' : '#d8e8d8'}`, color: '#2d4a30', backgroundColor: '#f5f7f5' }} />
+                {qtyErrors.total && <p className="text-xs" style={{ color: '#c0607a' }}>{qtyErrors.total}</p>}
+              </div>
             </div>
+            {saveError && <p className="text-xs mt-1.5" style={{ color: '#c0607a' }}>{saveError}</p>}
           </div>
 
           {/* Notes */}
@@ -630,6 +657,124 @@ function ReviewEditSheet({ item, categories, onClose, onSave, onSaveAndApprove, 
               Delete Item
             </button>
           )}
+        </div>
+        <div className="shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
+      </div>
+    </div>
+  )
+}
+
+function AddInventorySheet({ categories, onClose, onAdd }: {
+  categories: string[]
+  onClose: () => void
+  onAdd: (item: InventoryItem) => void
+}) {
+  const [name, setName] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [quantity, setQuantity] = useState('')
+  const [status, setStatus] = useState<InventoryItem['status']>('needed')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    if (!name.trim()) return
+    if (quantity !== '' && isNaN(Number(quantity))) { setError('Quantity must be a number'); return }
+    setSaving(true)
+    setError('')
+    const res = await fetch('/api/inventory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), categories: selectedCategories, quantity, status }),
+    })
+    if (res.ok) {
+      onAdd(await res.json() as InventoryItem)
+      onClose()
+    } else {
+      setError('Failed to add item')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 flex items-end justify-center z-50"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white w-full max-w-lg rounded-t-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '80vh' }}>
+        <div className="flex justify-center pt-2.5 pb-1 shrink-0">
+          <div className="w-9 h-1.5 rounded-full" style={{ backgroundColor: '#d8e8d8' }} />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0" style={{ borderBottom: '1px solid #e4ede4' }}>
+          <p className="font-semibold text-base" style={{ color: '#2d4a30' }}>Add Inventory Item</p>
+          <button onClick={onClose} className="w-11 h-11 flex items-center justify-center rounded-full text-xl" style={{ backgroundColor: '#f5f7f5', color: '#9db89f' }}>×</button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 pt-4 pb-6 space-y-4">
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            placeholder="Item name"
+            autoFocus
+            className="w-full rounded-2xl px-4 py-3 text-base font-semibold focus:outline-none"
+            style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
+          />
+
+          {categories.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Categories</p>
+              <div className="flex flex-wrap gap-2">
+                {categories.map(cat => {
+                  const sel = selectedCategories.includes(cat)
+                  return (
+                    <button key={cat} type="button"
+                      onClick={() => setSelectedCategories(prev =>
+                        sel ? prev.filter(c => c !== cat) : [...prev, cat]
+                      )}
+                      className="text-sm font-medium rounded-full px-3 py-1.5"
+                      style={{ backgroundColor: sel ? '#7a9e7e' : '#e8f0e8', color: sel ? '#fff' : '#5a7d5e' }}>
+                      {cat}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Quantity needed</p>
+            <input value={quantity} onChange={e => setQuantity(e.target.value)}
+              type="number" placeholder="e.g. 50"
+              className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none"
+              style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }} />
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#b8d0ba' }}>Status</p>
+            <div className="flex gap-2">
+              {(['needed', 'partial', 'acquired'] as const).map(s => (
+                <button key={s} type="button" onClick={() => setStatus(s)}
+                  className="flex-1 rounded-2xl py-2.5 text-sm font-semibold"
+                  style={{
+                    backgroundColor: status === s ? STATUS_COLORS[s].bg : '#f5f7f5',
+                    color: status === s ? STATUS_COLORS[s].color : '#9db89f',
+                    border: status === s ? `1.5px solid ${STATUS_COLORS[s].color}33` : '1.5px solid #e4ede4',
+                  }}>
+                  {STATUS_COLORS[s].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-center" style={{ color: '#c0607a' }}>{error}</p>}
+
+          <button
+            onClick={submit}
+            disabled={saving || !name.trim()}
+            className="w-full font-semibold rounded-2xl text-white"
+            style={{ backgroundColor: '#7a9e7e', opacity: saving || !name.trim() ? 0.5 : 1, minHeight: 52 }}
+          >
+            {saving ? 'Adding…' : 'Add Item'}
+          </button>
         </div>
         <div className="shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
       </div>

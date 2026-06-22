@@ -84,15 +84,9 @@ function DraggableTimeCard({
   const textColor  = item.type === 'task' ? '#2d6a30' : item.type === 'inventory' ? '#2d3a6a' : '#4a6a4a'
 
   return (
-    <div ref={setNodeRef} style={{ opacity: isDragging ? 0.3 : 1, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-      {/* 6-dot drag handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        onClick={e => e.stopPropagation()}
-        style={{ color: '#c8dcc8', cursor: 'grab', touchAction: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, minHeight: 36, flexShrink: 0, WebkitTapHighlightColor: 'transparent', userSelect: 'none', WebkitUserSelect: 'none' }}
-        title="Drag to change time"
-      >
+    <div ref={setNodeRef} {...attributes} style={{ opacity: isDragging ? 0.3 : 1, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+      {/* 6-dot handle — visual only; card body carries listeners so touch-hold anywhere drags */}
+      <div style={{ color: '#c8dcc8', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, minHeight: 36, flexShrink: 0, userSelect: 'none', WebkitUserSelect: 'none' }}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <circle cx="4" cy="3" r="1.5" fill="currentColor"/>
           <circle cx="10" cy="3" r="1.5" fill="currentColor"/>
@@ -101,12 +95,13 @@ function DraggableTimeCard({
           <circle cx="4" cy="11" r="1.5" fill="currentColor"/>
           <circle cx="10" cy="11" r="1.5" fill="currentColor"/>
         </svg>
-      </button>
+      </div>
 
-      {/* card */}
+      {/* card — tap opens details; touch-hold 250ms drags to new time slot */}
       <div
+        {...listeners}
         onClick={onEdit}
-        style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, backgroundColor: bg, borderRadius: 10, padding: '8px 10px', cursor: 'pointer' }}
+        style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, backgroundColor: bg, borderRadius: 10, padding: '8px 10px', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent' }}
       >
         <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: dot, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -119,7 +114,7 @@ function DraggableTimeCard({
             </p>
           )}
         </div>
-        <button onClick={onDelete} style={{ color: '#c0607a', fontSize: 18, lineHeight: 1, padding: 4, opacity: 0.5, flexShrink: 0 }}>×</button>
+        <button onClick={onDelete} onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} style={{ color: '#c0607a', fontSize: 18, lineHeight: 1, padding: 4, opacity: 0.5, flexShrink: 0 }}>×</button>
       </div>
     </div>
   )
@@ -252,6 +247,171 @@ function EditItemModal({ item, days, onClose, onSave, onDelete }: {
   )
 }
 
+// ── Detail sheet ─────────────────────────────────────────────────────────────
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Pending', in_progress: 'In Progress', done: 'Done', blocked: 'Blocked',
+  needed: 'Still Need', partial: 'In Progress', acquired: 'Have',
+}
+const STATUS_BG: Record<string, string> = {
+  pending: '#f0f4f0', in_progress: '#fdf6e3', done: '#e8f4e8', blocked: '#fce8ef',
+  needed: '#fce8ef', partial: '#fdf6e3', acquired: '#e8f4e8',
+}
+const STATUS_TEXT: Record<string, string> = {
+  pending: '#7a9e7e', in_progress: '#b8860b', done: '#2d6a30', blocked: '#c0607a',
+  needed: '#c0607a', partial: '#b8860b', acquired: '#2d6a30',
+}
+
+function ItemDetailSheet({ item, linkedTask, linkedInv, onClose, onEditSchedule }: {
+  item: TimelineItem
+  linkedTask?: Task
+  linkedInv?: InventoryItem
+  onClose: () => void
+  onEditSchedule: () => void
+}) {
+  const isNote = item.type === 'note'
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 55 }}>
+      <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', borderRadius: '20px 20px 0 0', maxHeight: '82vh', overflowY: 'auto' }}>
+
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 4 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#d8e8d8' }} />
+        </div>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9db89f' }}>
+              {isNote ? 'Note' : item.type === 'task' ? 'Task' : 'Inventory'}
+            </span>
+            {(linkedTask?.status || linkedInv?.status) && (
+              <span style={{
+                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                backgroundColor: STATUS_BG[linkedTask?.status ?? linkedInv?.status ?? ''],
+                color: STATUS_TEXT[linkedTask?.status ?? linkedInv?.status ?? ''],
+              }}>
+                {STATUS_LABEL[linkedTask?.status ?? linkedInv?.status ?? '']}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} style={{ color: '#9db89f', fontSize: 22, padding: 4, lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ padding: '0 16px 28px' }}>
+          {/* Title */}
+          <p style={{ fontSize: 18, fontWeight: 700, color: '#2d4a30', marginBottom: 16, lineHeight: 1.3 }}>
+            {linkedTask?.title ?? linkedInv?.name ?? item.title}
+          </p>
+
+          {/* Task details */}
+          {linkedTask && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {linkedTask.description && (
+                <div style={{ backgroundColor: '#f5f7f5', borderRadius: 12, padding: '10px 14px' }}>
+                  <p style={{ fontSize: 12, color: '#9db89f', fontWeight: 600, marginBottom: 4 }}>DESCRIPTION</p>
+                  <p style={{ fontSize: 14, color: '#2d4a30', lineHeight: 1.5 }}>{linkedTask.description}</p>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {linkedTask.category && (
+                  <div style={{ backgroundColor: '#f5f7f5', borderRadius: 10, padding: '8px 12px', flex: 1, minWidth: 120 }}>
+                    <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>CATEGORY</p>
+                    <p style={{ fontSize: 13, color: '#2d4a30' }}>{linkedTask.category}</p>
+                  </div>
+                )}
+                {linkedTask.assigned_to && (
+                  <div style={{ backgroundColor: '#f5f7f5', borderRadius: 10, padding: '8px 12px', flex: 1, minWidth: 120 }}>
+                    <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>ASSIGNED</p>
+                    <p style={{ fontSize: 13, color: '#2d4a30', textTransform: 'capitalize' }}>
+                      {linkedTask.assigned_to === 'both' ? 'Nick & Siobhan' : linkedTask.assigned_to}
+                    </p>
+                  </div>
+                )}
+                {linkedTask.due_date && (
+                  <div style={{ backgroundColor: '#f5f7f5', borderRadius: 10, padding: '8px 12px', flex: 1, minWidth: 120 }}>
+                    <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>DUE</p>
+                    <p style={{ fontSize: 13, color: '#2d4a30' }}>
+                      {new Date(linkedTask.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {linkedTask.important_contacts && (
+                <div style={{ backgroundColor: '#f5f7f5', borderRadius: 12, padding: '10px 14px' }}>
+                  <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>CONTACTS</p>
+                  <p style={{ fontSize: 13, color: '#2d4a30' }}>{linkedTask.important_contacts}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Inventory details */}
+          {linkedInv && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {linkedInv.categories?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {linkedInv.categories.map(c => (
+                    <span key={c} style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20, backgroundColor: '#e8f0e8', color: '#5a7d5e' }}>{c}</span>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {linkedInv.quantity && (
+                  <div style={{ backgroundColor: '#f5f7f5', borderRadius: 10, padding: '8px 12px', flex: 1, minWidth: 100 }}>
+                    <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>NEED</p>
+                    <p style={{ fontSize: 13, color: '#2d4a30' }}>{linkedInv.quantity}</p>
+                  </div>
+                )}
+                {linkedInv.quantity_have && (
+                  <div style={{ backgroundColor: '#f5f7f5', borderRadius: 10, padding: '8px 12px', flex: 1, minWidth: 100 }}>
+                    <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>HAVE</p>
+                    <p style={{ fontSize: 13, color: '#2d4a30' }}>{linkedInv.quantity_have}</p>
+                  </div>
+                )}
+                {linkedInv.responsible_party && (
+                  <div style={{ backgroundColor: '#f5f7f5', borderRadius: 10, padding: '8px 12px', flex: 1, minWidth: 100 }}>
+                    <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>RESPONSIBLE</p>
+                    <p style={{ fontSize: 13, color: '#2d4a30' }}>{linkedInv.responsible_party}</p>
+                  </div>
+                )}
+              </div>
+              {linkedInv.notes && (
+                <div style={{ backgroundColor: '#f5f7f5', borderRadius: 12, padding: '10px 14px' }}>
+                  <p style={{ fontSize: 11, color: '#b8d0ba', fontWeight: 600, marginBottom: 2 }}>NOTES</p>
+                  <p style={{ fontSize: 14, color: '#2d4a30', lineHeight: 1.5 }}>{linkedInv.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Note: just show title (already shown above) */}
+          {isNote && item.notes && (
+            <div style={{ backgroundColor: '#f5f7f5', borderRadius: 12, padding: '10px 14px' }}>
+              <p style={{ fontSize: 14, color: '#2d4a30', lineHeight: 1.5 }}>{item.notes}</p>
+            </div>
+          )}
+
+          {/* Time info */}
+          <div style={{ marginTop: 16, fontSize: 13, color: '#9db89f' }}>
+            {fmt12(item.time_slot)} · {fmtDay(item.day_date).weekday}, {fmtDay(item.day_date).short}
+          </div>
+
+          {/* Edit schedule button */}
+          <button
+            onClick={onEditSchedule}
+            style={{ marginTop: 16, width: '100%', padding: '13px', borderRadius: 14, fontSize: 14, fontWeight: 600, backgroundColor: '#e8f0e8', color: '#2d4a30' }}
+          >
+            Edit schedule
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function Timeline({ tasks }: { tasks: Task[] }) {
@@ -261,6 +421,7 @@ export default function Timeline({ tasks }: { tasks: Task[] }) {
   const [dayIdx,       setDayIdx]       = useState(0)
   const [loading,      setLoading]      = useState(true)
   const [draggingItem, setDraggingItem] = useState<TimelineItem | null>(null)
+  const [detailItem,   setDetailItem]   = useState<TimelineItem | null>(null)
   const [editItem,     setEditItem]     = useState<TimelineItem | null>(null)
 
   // Add sheet
@@ -477,7 +638,7 @@ export default function Timeline({ tasks }: { tasks: Task[] }) {
                             item={item}
                             tasks={tasks}
                             inv={inv}
-                            onEdit={() => setEditItem(item)}
+                            onEdit={() => setDetailItem(item)}
                             onDelete={e => deleteItem(item.id, e)}
                           />
                         ))}
@@ -563,7 +724,7 @@ export default function Timeline({ tasks }: { tasks: Task[] }) {
                             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid #f0f4f0', cursor: 'pointer', backgroundColor: addInvId === i.id ? '#e8f4e8' : '#fff' }}>
                             <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: STATUS_DOT[i.status] ?? '#9db89f', flexShrink: 0 }} />
                             <span style={{ fontSize: 13, color: '#2d4a30', flex: 1 }}>{i.name}</span>
-                            {i.category && <span style={{ fontSize: 10, color: '#9db89f' }}>{i.category}</span>}
+                            {i.categories?.length > 0 && <span style={{ fontSize: 10, color: '#9db89f' }}>{i.categories[0]}</span>}
                             {addInvId === i.id && <span style={{ color: '#7a9e7e' }}>✓</span>}
                           </div>
                         ))
@@ -578,6 +739,17 @@ export default function Timeline({ tasks }: { tasks: Task[] }) {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Detail sheet */}
+        {detailItem && !editItem && (
+          <ItemDetailSheet
+            item={detailItem}
+            linkedTask={tasks.find(t => t.id === detailItem.task_id)}
+            linkedInv={inv.find(i => i.id === detailItem.inventory_id)}
+            onClose={() => setDetailItem(null)}
+            onEditSchedule={() => { setEditItem(detailItem); setDetailItem(null) }}
+          />
         )}
 
         {/* Edit modal */}

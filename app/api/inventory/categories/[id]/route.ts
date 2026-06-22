@@ -28,10 +28,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (updateItems && existing.name !== name.trim()) {
-    await supabase
+    const { data: affected } = await supabase
       .from('inventory')
-      .update({ category: name.trim() })
-      .eq('category', existing.name)
+      .select('id, categories')
+      .contains('categories', [existing.name])
+    if (affected && affected.length > 0) {
+      await Promise.all(
+        (affected as { id: number; categories: string[] }[]).map(item =>
+          supabase.from('inventory').update({
+            categories: item.categories.map(c => c === existing.name ? name.trim() : c),
+          }).eq('id', item.id)
+        )
+      )
+    }
   }
 
   return NextResponse.json(data)

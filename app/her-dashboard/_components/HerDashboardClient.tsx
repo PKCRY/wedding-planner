@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Task, Event, TaskComment } from '@/lib/db'
 import type { SessionUser } from '@/lib/session'
@@ -35,11 +35,13 @@ export default function HerDashboardClient({
   initialTop5,
   initialBlocked,
   initialEvents,
+  initialTotalWorkable,
 }: {
   user: SessionUser
   initialTop5: Task[]
   initialBlocked: Task[]
   initialEvents: Event[]
+  initialTotalWorkable: number
 }) {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>(initialTop5)
@@ -54,7 +56,22 @@ export default function HerDashboardClient({
   const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
   const [allTasks, setAllTasks] = useState<Task[] | null>(null)
   const [showAll, setShowAll] = useState(false)
-  const [totalWorkable, setTotalWorkable] = useState<number | null>(null)
+  const [totalWorkable, setTotalWorkable] = useState<number | null>(initialTotalWorkable)
+  const [search, setSearch] = useState('')
+
+  const searchLower = search.toLowerCase().trim()
+  const searchResults = searchLower
+    ? (allTasks ?? tasks).filter(t =>
+        t.title.toLowerCase().includes(searchLower) ||
+        (t.category?.toLowerCase() ?? '').includes(searchLower) ||
+        (t.description?.toLowerCase() ?? '').includes(searchLower)
+      )
+    : null
+
+  useEffect(() => {
+    if (!searchLower || allTasks !== null) return
+    fetch('/api/tasks?all=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setAllTasks(d) })
+  }, [searchLower, allTasks])
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -160,16 +177,46 @@ export default function HerDashboardClient({
 
       {/* Header */}
       <header className="bg-white sticky top-0 z-10" style={{ borderBottom: '1px solid #e4ede4' }}>
-        <div className="max-w-lg mx-auto px-5 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium tracking-wide uppercase" style={{ color: '#b8d0ba', letterSpacing: '0.08em' }}>
+        <div className="w-full px-4 md:px-8 lg:px-10 xl:px-16 py-4 flex items-center gap-4 justify-between">
+          {/* Logo / greeting */}
+          <div className="shrink-0">
+            <p className="text-xs font-medium tracking-wide uppercase hidden md:block" style={{ color: '#b8d0ba', letterSpacing: '0.08em' }}>
               Wedding Planner
             </p>
-            <p className="text-lg font-semibold leading-tight mt-0.5" style={{ color: '#2d4a30' }}>
+            <p className="text-lg font-semibold leading-tight" style={{ color: '#2d4a30' }}>
               Hi {user.name}!
             </p>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Desktop nav — hidden on mobile (uses bottom nav instead) */}
+          <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
+            {(
+              [
+                { id: 'tasks',     label: 'Tasks' },
+                { id: 'inventory', label: 'Inventory' },
+                { id: 'timeline',  label: 'Timeline' },
+                { id: 'calendar',  label: 'Calendar' },
+                { id: 'blocked',   label: blockedTasks.length > 0 ? `Blocked (${blockedTasks.length})` : 'Blocked' },
+              ] as { id: Tab; label: string }[]
+            ).map(item => (
+              <button
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className="px-4 py-2 text-sm font-medium rounded-xl transition-colors"
+                style={{
+                  color: tab === item.id ? '#2d4a30' : '#9db89f',
+                  backgroundColor: tab === item.id ? '#e8f0e8' : 'transparent',
+                  ...(item.id === 'blocked' && blockedTasks.length > 0 && tab !== 'blocked'
+                    ? { color: '#c0607a' } : {}),
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 shrink-0">
             <NotificationCenter />
             <button
               onClick={() => setShowSettings(true)}
@@ -182,86 +229,114 @@ export default function HerDashboardClient({
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-5 py-5 space-y-4 pb-28">
+      <div className="w-full px-4 md:px-8 lg:px-10 xl:px-16 py-5 space-y-4 pb-28 md:pb-8">
 
         {tab === 'tasks' && (
           <>
-            {/* Top 5 priority tasks */}
-            {tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 space-y-2">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ backgroundColor: '#e8f4e8' }}>✓</div>
-                <p className="font-semibold text-base" style={{ color: '#2d4a30' }}>All caught up!</p>
-                <p className="text-sm text-center" style={{ color: '#b8d0ba' }}>No tasks right now. Enjoy the moment.</p>
-              </div>
-            ) : (
+            {/* Search bar */}
+            <div className="relative">
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search tasks..."
+                className="w-full rounded-2xl px-4 py-3 text-sm focus:outline-none pr-10"
+                style={{ border: '1px solid #e4ede4', color: '#2d4a30', backgroundColor: '#fff' }}
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-lg leading-none" style={{ color: '#b8d0ba' }}>×</button>
+              )}
+            </div>
+
+            {/* Search results */}
+            {searchResults !== null ? (
               <div className="space-y-2">
-                <div className="flex items-center justify-between px-1 pb-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Top priority</p>
-                  {totalWorkable !== null && totalWorkable > tasks.length && (
-                    <span className="text-xs" style={{ color: '#b8d0ba' }}>{tasks.length} of {totalWorkable}</span>
-                  )}
-                </div>
-                {tasks.map(task => (
+                <p className="text-xs font-semibold uppercase tracking-wide px-1" style={{ color: '#b8d0ba' }}>
+                  {searchResults.length === 0 ? 'No results' : `${searchResults.length} result${searchResults.length === 1 ? '' : 's'}`}
+                </p>
+                {searchResults.map(task => (
                   <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
                 ))}
               </div>
-            )}
+            ) : (
+              <>
+                {/* Top 5 priority tasks */}
+                {tasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-2">
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl" style={{ backgroundColor: '#e8f4e8' }}>✓</div>
+                    <p className="font-semibold text-base" style={{ color: '#2d4a30' }}>All caught up!</p>
+                    <p className="text-sm text-center" style={{ color: '#b8d0ba' }}>No tasks right now. Enjoy the moment.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1 pb-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Top priority</p>
+                      {totalWorkable !== null && totalWorkable > tasks.length && (
+                        <span className="text-xs" style={{ color: '#b8d0ba' }}>{tasks.length} of {totalWorkable}</span>
+                      )}
+                    </div>
+                    {tasks.map(task => (
+                      <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
+                    ))}
+                  </div>
+                )}
 
-            {/* See all remaining tasks */}
-            {(totalWorkable ?? 0) > tasks.length && (
-              <div className="pt-2">
-                <button
-                  onClick={() => {
-                    if (!showAll && allTasks === null) loadAllTasks()
-                    else setShowAll(v => !v)
-                  }}
-                  className="w-full flex items-center justify-between px-1 py-2"
-                >
-                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>
-                    All tasks {totalWorkable !== null && `(${totalWorkable})`}
-                  </span>
-                  <span className="text-xs" style={{ color: '#b8d0ba' }}>{showAll ? '▲' : '▼'}</span>
-                </button>
-                {showAll && (
-                  <div className="space-y-2 mt-1">
-                    {allTasks === null ? (
-                      <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Loading...</p>
-                    ) : (
-                      allTasks.slice(tasks.length).map(task => (
-                        <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
-                      ))
+                {/* See all remaining tasks */}
+                {(totalWorkable ?? 0) > tasks.length && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        if (!showAll && allTasks === null) loadAllTasks()
+                        else setShowAll(v => !v)
+                      }}
+                      className="w-full flex items-center justify-between px-1 py-2"
+                    >
+                      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>
+                        All tasks {totalWorkable !== null && `(${totalWorkable})`}
+                      </span>
+                      <span className="text-xs" style={{ color: '#b8d0ba' }}>{showAll ? '▲' : '▼'}</span>
+                    </button>
+                    {showAll && (
+                      <div className="space-y-2 mt-1">
+                        {allTasks === null ? (
+                          <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Loading...</p>
+                        ) : (
+                          allTasks.slice(tasks.length).map(task => (
+                            <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
+                          ))
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Completed section */}
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  if (completedTasks === null) refreshCompleted()
-                  setShowCompleted(v => !v)
-                }}
-                className="w-full flex items-center justify-between px-1 py-2"
-              >
-                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Completed</span>
-                <span className="text-xs" style={{ color: '#b8d0ba' }}>{showCompleted ? '▲' : '▼'}</span>
-              </button>
-              {showCompleted && (
-                <div className="space-y-2 mt-1">
-                  {completedTasks === null ? (
-                    <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Loading...</p>
-                  ) : completedTasks.length === 0 ? (
-                    <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Nothing completed yet.</p>
-                  ) : (
-                    completedTasks.map(task => (
-                      <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
-                    ))
+                {/* Completed section */}
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      if (completedTasks === null) refreshCompleted()
+                      setShowCompleted(v => !v)
+                    }}
+                    className="w-full flex items-center justify-between px-1 py-2"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Completed</span>
+                    <span className="text-xs" style={{ color: '#b8d0ba' }}>{showCompleted ? '▲' : '▼'}</span>
+                  </button>
+                  {showCompleted && (
+                    <div className="space-y-2 mt-1">
+                      {completedTasks === null ? (
+                        <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Loading...</p>
+                      ) : completedTasks.length === 0 ? (
+                        <p className="text-sm px-1" style={{ color: '#b8d0ba' }}>Nothing completed yet.</p>
+                      ) : (
+                        completedTasks.map(task => (
+                          <HerTaskCard key={task.id} task={task} onDetail={() => setDetailTask(task)} />
+                        ))
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </>
         )}
 
@@ -290,12 +365,12 @@ export default function HerDashboardClient({
           )
         )}
 
-        {tab === 'inventory' && <InventoryList isAdmin={false} />}
+        {tab === 'inventory' && <InventoryList isAdmin={true} />}
 
-        {tab === 'timeline' && <Timeline tasks={tasks} />}
+        {tab === 'timeline' && <Timeline tasks={allTasks ?? tasks} />}
 
         {tab === 'calendar' && (
-          <Calendar tasks={[]} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
+          <Calendar tasks={allTasks ?? tasks} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
         )}
       </div>
 
@@ -303,7 +378,7 @@ export default function HerDashboardClient({
       {tab === 'tasks' && (
         <button
           onClick={() => setShowAdd(true)}
-          className="fixed right-5 w-11 h-11 rounded-full text-white text-xl flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10 fab-above-nav"
+          className="fixed right-5 w-11 h-11 rounded-full text-white text-xl flex items-center justify-center shadow-lg active:scale-95 transition-transform z-10 fab-above-nav md:bottom-6"
           style={{ backgroundColor: '#d4849a', boxShadow: '0 4px 16px rgba(212,132,154,0.4)' }}
         >
           +
@@ -355,8 +430,8 @@ export default function HerDashboardClient({
         }} />
       )}
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 bg-white" style={{ borderTop: '1px solid #e4ede4' }}>
+      {/* Bottom nav — mobile only */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white" style={{ borderTop: '1px solid #e4ede4' }}>
         <div className="flex items-center justify-around max-w-lg mx-auto" style={{ paddingTop: 8, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
           {/* Tasks */}
           <button onClick={() => setTab('tasks')} style={{ color: tab === 'tasks' ? '#2d4a30' : '#c8dcc8', width: 56, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -511,7 +586,6 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
     status: 'pending' as Task['status'],
     category: '',
     due_date: '',
-    responsible_party: '',
     important_contacts: '',
     blocked_by: '',
   })
@@ -526,7 +600,6 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
       status: task.status,
       category: task.category ?? '',
       due_date: task.due_date ?? '',
-      responsible_party: task.responsible_party ?? '',
       important_contacts: task.important_contacts ?? '',
       blocked_by: task.blocked_by ?? '',
     })
@@ -550,7 +623,6 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
       status: editFields.status,
       category: editFields.category,
       due_date: editFields.due_date || null,
-      responsible_party: editFields.responsible_party,
       important_contacts: editFields.important_contacts,
       blocked_by: editFields.blocked_by,
     })
@@ -644,16 +716,6 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
                     style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
                   />
                 </div>
-                <div>
-                  <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Responsible</p>
-                  <input
-                    value={editFields.responsible_party}
-                    onChange={e => setEditFields(f => ({ ...f, responsible_party: e.target.value }))}
-                    placeholder="Who's responsible?"
-                    className="w-full rounded-2xl px-3 py-2.5 text-sm focus:outline-none"
-                    style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
-                  />
-                </div>
               </div>
               <div>
                 <p className="text-xs font-medium mb-1.5 px-1" style={{ color: '#9db89f' }}>Important contacts</p>
@@ -703,7 +765,7 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
               )}
 
               {/* Meta chips */}
-              {(task.category || task.due_date || task.completed_date || task.responsible_party || task.important_contacts || task.created_by) && (
+              {(task.category || task.due_date || task.completed_date || task.assigned_to || task.important_contacts || task.created_by) && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
@@ -733,10 +795,12 @@ function TaskDetailModal({ task, onClose, onMarkDone, onMarkBlocked, onUnblock, 
                       </p>
                     </div>
                   )}
-                  {task.responsible_party && (
+                  {task.assigned_to && (
                     <div className="rounded-2xl p-4" style={{ backgroundColor: '#f5f7f5' }}>
                       <p className="text-xs font-medium mb-1" style={{ color: '#9db89f' }}>Responsible</p>
-                      <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>{task.responsible_party}</p>
+                      <p className="text-sm font-semibold" style={{ color: '#2d4a30' }}>
+                        {task.assigned_to === 'both' ? 'Nick & Siobhan' : task.assigned_to.split(',').map((s: string) => s.trim().charAt(0).toUpperCase() + s.trim().slice(1)).join(' & ')}
+                      </p>
                     </div>
                   )}
                   {task.important_contacts && (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import AddToTimelineSheet from '@/components/AddToTimelineSheet'
 import {
   DndContext,
@@ -42,6 +42,12 @@ const STATUS_LABEL: Record<string, string> = {
   needed:   'Still Need',
   partial:  'In Progress',
   acquired: 'Done',
+}
+
+const EXCEL_STATUS_LABEL: Record<string, string> = {
+  needed:   "Don't Have",
+  partial:  'In Prog',
+  acquired: 'Have',
 }
 
 const NEXT_STATUS: Record<string, InventoryItem['status']> = {
@@ -92,6 +98,18 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: NEXT_STATUS[item.status] }),
+    })
+    if (res.ok) {
+      const updated = await res.json() as InventoryItem
+      setItems(prev => prev.map(i => i.id === item.id ? updated : i))
+    }
+  }
+
+  async function setStatus(item: InventoryItem, newStatus: InventoryItem['status']) {
+    const res = await fetch(`/api/inventory/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
     })
     if (res.ok) {
       const updated = await res.json() as InventoryItem
@@ -182,8 +200,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     if (updateItems) {
       setItems(prev => prev.map(i => ({
         ...i,
-        category: i.category === oldName ? newName : i.category,
-        secondary_category: i.secondary_category === oldName ? newName : i.secondary_category,
+        categories: (i.categories ?? []).map(c => c === oldName ? newName : c),
       })))
     }
   }
@@ -219,8 +236,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
       item.name.toLowerCase().includes(q) ||
       (item.notes ?? '').toLowerCase().includes(q) ||
       (item.responsible_party ?? '').toLowerCase().includes(q) ||
-      (item.category ?? '').toLowerCase().includes(q) ||
-      (item.secondary_category ?? '').toLowerCase().includes(q)
+      (item.categories ?? []).some(c => c.toLowerCase().includes(q))
     )
   }
 
@@ -228,14 +244,14 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
   const allCategoryNames = categories.map(c => c.name)
   const itemCounts: Record<string, number> = {}
   for (const cat of allCategoryNames) {
-    itemCounts[cat] = items.filter(i => i.category === cat || i.secondary_category === cat).length
+    itemCounts[cat] = items.filter(i => (i.categories ?? []).includes(cat)).length
   }
 
-  const hasUncategorized = items.some(i => !i.category && !i.secondary_category)
+  const hasUncategorized = items.some(i => !i.categories?.length)
 
   function getCatItems(cat: string) {
-    if (cat === '__none__') return items.filter(i => !i.category && !i.secondary_category)
-    return items.filter(i => i.category === cat || i.secondary_category === cat)
+    if (cat === '__none__') return items.filter(i => !i.categories?.length)
+    return items.filter(i => (i.categories ?? []).includes(cat))
   }
 
   const allCategoryKeys = [...allCategoryNames, ...(hasUncategorized ? ['__none__'] : [])]
@@ -255,7 +271,8 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
     const activeItems = catItems.filter(i => i.status !== 'acquired').filter(matchesSearch).sort((a, b) => a.sort_order - b.sort_order)
     const doneItems = catItems.filter(i => i.status === 'acquired').filter(matchesSearch)
     const totalVisible = activeItems.length + doneItems.length
-    if (totalVisible === 0) return null
+    // Hide during active search if nothing matches; always show when not searching
+    if (totalVisible === 0 && search.trim()) return null
 
     const isCollapsed = collapsedCategories.has(catKey)
     const isDoneExpanded = expandedDone.has(catKey)
@@ -303,7 +320,144 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      {/* ── Category accordion (sortable) ── */}
+      {/* ── Desktop: Excel-style spreadsheet table ── */}
+      <div className="hidden lg:block overflow-hidden rounded-xl" style={{ border: '1px solid #c8dcc8', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#dceadc' }}>
+                {[
+                  ['Status', 130],
+                  ['Item', null],
+                  ['Have / Needed', 130],
+                  ['Responsible Party', 160],
+                  ['Notes', null],
+                ].map(([label, w], i, arr) => (
+                  <th key={label as string} style={{
+                    width: w ? (w as number) : undefined,
+                    padding: '10px 14px',
+                    textAlign: 'left',
+                    fontWeight: 700,
+                    fontSize: 11,
+                    color: '#2d4a30',
+                    borderBottom: '2px solid #adc8ad',
+                    borderRight: i < arr.length - 1 ? '1px solid #adc8ad' : undefined,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {label as string}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {allCategoryKeys.every(k => getCatItems(k).filter(matchesSearch).length === 0) ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: 32, textAlign: 'center', color: '#b8d0ba' }}>
+                    {search.trim() ? 'No items match your search.' : 'No inventory items yet.'}
+                  </td>
+                </tr>
+              ) : allCategoryKeys.map((catKey, catIdx) => {
+                const catLabel = catKey === '__none__' ? 'Other' : catKey
+                const group = getCatItems(catKey).filter(matchesSearch).sort((a, b) => a.sort_order - b.sort_order)
+                // Hide during active search if nothing matches; always show when not searching
+                if (!group.length && search.trim()) return null
+                const isCollapsed = collapsedCategories.has(catKey)
+                const doneCount = group.filter(i => i.status === 'acquired').length
+                const isFirst = catIdx === 0
+                return (
+                  <Fragment key={catKey}>
+                    {/* Category header row */}
+                    <tr
+                      onClick={() => toggleCategory(catKey)}
+                      style={{ cursor: 'pointer', backgroundColor: '#d8ebd8', userSelect: 'none' }}
+                    >
+                      <td colSpan={5} style={{
+                        padding: '8px 14px',
+                        borderTop: !isFirst ? '2px solid #adc8ad' : undefined,
+                        borderBottom: '1px solid #adc8ad',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <svg
+                            width="14" height="14" viewBox="0 0 14 14" fill="none"
+                            style={{ color: '#7a9e7e', flexShrink: 0, transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}
+                          >
+                            <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <span style={{ fontWeight: 700, fontSize: 12, color: '#2d4a30' }}>{catLabel}</span>
+                          <span style={{ fontSize: 11, color: '#7a9e7e', fontWeight: 500 }}>
+                            {doneCount}/{group.length} done
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Item rows */}
+                    {!isCollapsed && group.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '10px 14px 10px 28px', color: '#b8d0ba', fontSize: 12, borderBottom: '1px solid #e4ede4' }}>
+                          No items in this category yet
+                        </td>
+                      </tr>
+                    )}
+                    {!isCollapsed && group.map((item, ri) => {
+                      const acquired = item.status === 'acquired'
+                      return (
+                        <tr key={item.id} onClick={() => setEditItem(item)} className="group cursor-pointer">
+                          <td className="group-hover:bg-[#f5f9f5]" style={{ padding: '4px 10px', borderBottom: '1px solid #e4ede4', borderRight: '1px solid #e4ede4' }}>
+                            <select
+                              value={item.status}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => { e.stopPropagation(); setStatus(item, e.target.value as InventoryItem['status']) }}
+                              style={{
+                                backgroundColor: STATUS_BG[item.status],
+                                color: STATUS_TEXT[item.status],
+                                fontSize: 12,
+                                fontWeight: 600,
+                                padding: '3px 6px',
+                                borderRadius: 4,
+                                border: `1px solid ${STATUS_BAR[item.status]}`,
+                                cursor: 'pointer',
+                                width: '100%',
+                                appearance: 'auto',
+                              }}
+                            >
+                              <option value="acquired">Have</option>
+                              <option value="needed">Don&apos;t Have</option>
+                              <option value="partial">In Prog</option>
+                            </select>
+                          </td>
+                          <td className="group-hover:bg-[#f5f9f5]" style={{ padding: '7px 14px', borderBottom: '1px solid #e4ede4', borderRight: '1px solid #e4ede4', color: acquired ? '#9db89f' : '#2d4a30', fontWeight: 500, fontSize: 13 }}>
+                            {item.name}
+                          </td>
+                          <td className="group-hover:bg-[#f5f9f5]" style={{ padding: '7px 14px', borderBottom: '1px solid #e4ede4', borderRight: '1px solid #e4ede4', color: '#5a7d5e', fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>
+                            {item.quantity_have && item.quantity
+                              ? `${item.quantity_have} / ${item.quantity}`
+                              : item.quantity_have
+                              ? item.quantity_have
+                              : item.quantity
+                              ? `— / ${item.quantity}`
+                              : ''}
+                          </td>
+                          <td className="group-hover:bg-[#f5f9f5]" style={{ padding: '7px 14px', borderBottom: '1px solid #e4ede4', borderRight: '1px solid #e4ede4', color: '#7a9e7e', fontSize: 12 }}>
+                            {item.responsible_party}
+                          </td>
+                          <td className="group-hover:bg-[#f5f9f5]" style={{ padding: '7px 14px', borderBottom: '1px solid #e4ede4', color: '#9db89f', fontSize: 12 }}>
+                            {item.notes}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Mobile: category accordion (sortable) ── */}
+      <div className="lg:hidden">
       <DndContext sensors={catSensors} collisionDetection={closestCenter} onDragEnd={handleCatDragEnd}>
         <SortableContext items={categories.map(c => c.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2 pb-24 lg:pb-8">
@@ -359,6 +513,9 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
 
                       {!isCollapsed && (
                         <div style={{ borderTop: '1px solid #f0f4f0' }}>
+                          {totalVisible === 0 && (
+                            <p className="px-4 py-3 text-sm" style={{ color: '#b8d0ba' }}>No items in this category yet</p>
+                          )}
                           {activeItems.length > 0 && (
                             <div className="px-2 pb-2 pt-1 space-y-2">
                               {activeItems.map(item => (
@@ -459,6 +616,7 @@ export default function InventoryList({ isAdmin }: { isAdmin: boolean }) {
           </div>
         </SortableContext>
       </DndContext>
+      </div>{/* end lg:hidden */}
 
       {/* FAB */}
       <button
@@ -619,8 +777,9 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
   onDelete?: () => Promise<void>
 }) {
   const [name, setName] = useState(item?.name ?? '')
-  const [category, setCategory] = useState(item?.category ?? defaultCategory)
-  const [secondaryCategory, setSecondaryCategory] = useState(item?.secondary_category ?? '')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    item?.categories ?? (defaultCategory ? [defaultCategory] : [])
+  )
   const [quantity, setQuantity] = useState(item?.quantity ?? '')
   const [quantityHave, setQuantityHave] = useState(item?.quantity_have ?? '')
   const [status, setStatus] = useState<InventoryItem['status']>(item?.status ?? 'needed')
@@ -629,9 +788,25 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
   const [sortOrder, setSortOrder] = useState<string>(item?.sort_order != null ? String(item.sort_order) : '')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
-  const [secondaryCategorySheetOpen, setSecondaryCategorySheetOpen] = useState(false)
+  const [manageCatsOpen, setManageCatsOpen] = useState(false)
+  const [addCatOpen, setAddCatOpen] = useState(false)
+  const [newCatText, setNewCatText] = useState('')
   const [showAddTimeline, setShowAddTimeline] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  async function handleAddCat() {
+    const t = newCatText.trim()
+    if (!t) return
+    await onCreateCategory?.(t)
+    setSelectedCategories(prev => prev.includes(t) ? prev : [...prev, t])
+    setNewCatText('')
+    setAddCatOpen(false)
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -640,8 +815,7 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
     const parsed = sortOrder !== '' ? parseInt(sortOrder, 10) : undefined
     await onSave({
       name: name.trim(),
-      category: category.trim(),
-      secondary_category: secondaryCategory.trim(),
+      categories: selectedCategories,
       quantity,
       quantity_have: quantityHave,
       status,
@@ -683,45 +857,66 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
             style={{ border: '1px solid #d8e8d8', color: '#2d4a30', backgroundColor: '#f5f7f5' }}
           />
 
-          {/* Primary Category */}
+          {/* Categories */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: '#b8d0ba' }}>Category</p>
-            <button
-              type="button"
-              onClick={() => setCategorySheetOpen(true)}
-              className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between focus:outline-none text-sm"
-              style={{ border: '1px solid #d8e8d8', color: category ? '#2d4a30' : '#9db89f', backgroundColor: '#f5f7f5' }}
-            >
-              <span>{category || 'Select or create category…'}</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f', flexShrink: 0 }}>
-                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Secondary Category */}
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: '#b8d0ba' }}>Second category <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional — card appears in both)</span></p>
-            <button
-              type="button"
-              onClick={() => setSecondaryCategorySheetOpen(true)}
-              className="w-full rounded-2xl px-4 py-3 text-left flex items-center justify-between focus:outline-none text-sm"
-              style={{ border: '1px solid #d8e8d8', color: secondaryCategory ? '#2d4a30' : '#9db89f', backgroundColor: '#f5f7f5' }}
-            >
-              <span>{secondaryCategory || 'None'}</span>
-              <div className="flex items-center gap-2 shrink-0">
-                {secondaryCategory && (
-                  <span
-                    onClick={e => { e.stopPropagation(); setSecondaryCategory('') }}
-                    className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: '#fce8ef', color: '#c0607a' }}
-                  >Clear</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#b8d0ba' }}>Categories</p>
+              {isAdmin && onRenameCategory && (
+                <button type="button" onClick={() => setManageCatsOpen(true)} className="text-xs font-medium" style={{ color: '#9db89f' }}>
+                  Manage
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {selectedCategories.map(cat => (
+                <button key={cat} type="button"
+                  onClick={() => setSelectedCategories(prev => prev.filter(c => c !== cat))}
+                  className="text-sm font-medium rounded-full px-3 py-1.5 flex items-center gap-1.5"
+                  style={{ backgroundColor: '#7a9e7e', color: '#fff' }}
+                >
+                  {cat} <span style={{ opacity: 0.7, fontSize: 15, lineHeight: 1 }}>×</span>
+                </button>
+              ))}
+              <button type="button" onClick={() => setAddCatOpen(p => !p)}
+                className="text-sm font-medium rounded-full px-3 py-1.5"
+                style={{ backgroundColor: '#f5f7f5', color: '#9db89f', border: '1px dashed #c8d8c8' }}
+              >
+                {addCatOpen ? '− Close' : '+ Add category'}
+              </button>
+            </div>
+            {addCatOpen && (
+              <div className="space-y-2 pt-1">
+                {allCategories.filter(cat => !selectedCategories.includes(cat.name)).length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {allCategories.filter(cat => !selectedCategories.includes(cat.name)).map(cat => (
+                      <button key={cat.id} type="button"
+                        onClick={() => setSelectedCategories(prev => [...prev, cat.name])}
+                        className="text-sm font-medium rounded-full px-3 py-1.5 transition-colors"
+                        style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e' }}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
                 )}
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: '#9db89f' }}>
-                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                <div className="flex gap-2">
+                  <input
+                    value={newCatText}
+                    onChange={e => setNewCatText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newCatText.trim()) handleAddCat() }}
+                    placeholder="New category name"
+                    autoFocus
+                    className="flex-1 min-w-0 rounded-xl px-4 text-sm focus:outline-none"
+                    style={{ border: '1px solid #b8d0ba', color: '#2d4a30', minHeight: 44 }}
+                  />
+                  <button type="button" onClick={handleAddCat} disabled={!newCatText.trim()}
+                    className="rounded-xl px-4 text-sm font-medium text-white"
+                    style={{ backgroundColor: '#7a9e7e', opacity: newCatText.trim() ? 1 : 0.45, minHeight: 44 }}>
+                    Add
+                  </button>
+                </div>
               </div>
-            </button>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -825,27 +1020,30 @@ function ItemModal({ item, isAdmin, allCategories, itemCounts, defaultCategory =
         </form>
       </div>
 
-      {categorySheetOpen && (
+      {manageCatsOpen && (
         <CategoryPickerSheet
           categories={allCategories}
           itemCounts={itemCounts}
-          value={category}
-          onSelect={cat => { setCategory(cat); setCategorySheetOpen(false) }}
+          value=''
+          onSelect={cat => {
+            if (cat) {
+              setSelectedCategories(prev =>
+                prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+              )
+            }
+            setManageCatsOpen(false)
+          }}
           onCreateCategory={onCreateCategory}
-          onRenameCategory={onRenameCategory}
-          onDeleteCategory={onDeleteCategory}
-          onClose={() => setCategorySheetOpen(false)}
-        />
-      )}
-
-      {secondaryCategorySheetOpen && (
-        <CategoryPickerSheet
-          categories={allCategories}
-          itemCounts={itemCounts}
-          value={secondaryCategory}
-          onSelect={cat => { setSecondaryCategory(cat); setSecondaryCategorySheetOpen(false) }}
-          onCreateCategory={onCreateCategory}
-          onClose={() => setSecondaryCategorySheetOpen(false)}
+          onRenameCategory={onRenameCategory ? async (id, oldName, newName, ui) => {
+            await onRenameCategory(id, oldName, newName, ui)
+            setSelectedCategories(prev => prev.map(c => c === oldName ? newName : c))
+          } : undefined}
+          onDeleteCategory={onDeleteCategory ? async (id) => {
+            const cat = allCategories.find(c => c.id === id)
+            await onDeleteCategory(id)
+            if (cat) setSelectedCategories(prev => prev.filter(c => c !== cat.name))
+          } : undefined}
+          onClose={() => setManageCatsOpen(false)}
         />
       )}
 

@@ -116,7 +116,7 @@ print(f'Categories: {categories_ordered}')
 
 # ── fetch existing DB inventory ──────────────────────────────────────────────
 
-status_code, existing = req('GET', 'inventory?select=id,name,category,status&limit=1000')
+status_code, existing = req('GET', 'inventory?select=id,name,status,quantity,quantity_have,categories&limit=1000')
 if status_code != 200:
     print(f'ERROR fetching inventory: {status_code} {existing}')
     sys.exit(1)
@@ -128,6 +128,35 @@ def normalise(s):
     return re.sub(r'\s+', ' ', s.strip().lower().rstrip('?').rstrip())
 
 db_by_norm = {normalise(r['name']): r for r in existing}
+
+def to_num(v):
+    """Parse a quantity string to float, or None if unparseable."""
+    if v is None or str(v).strip() == '':
+        return None
+    try:
+        return float(str(v).replace(',', '').strip())
+    except (ValueError, AttributeError):
+        return None
+
+def max_qty(app_val, excel_val):
+    """Return the higher quantity value as a string; fallback to whichever is non-empty."""
+    a = to_num(app_val)
+    e = to_num(excel_val)
+    if a is None and e is None:
+        return excel_val or app_val or ''
+    if a is None:
+        return excel_val or ''
+    if e is None:
+        return app_val or ''
+    best = max(a, e)
+    return str(int(best)) if best == int(best) else str(best)
+
+def merge_categories(app_cats, excel_cat):
+    """Union of app's existing categories with the Excel category."""
+    result = list(app_cats) if app_cats else []
+    if excel_cat and excel_cat not in result:
+        result.append(excel_cat)
+    return result
 
 FUZZY_THRESHOLD = 0.82
 
@@ -182,12 +211,25 @@ skipped = 0
 for item in items:
     match, ratio = find_match(item['name'])
 
+    if match:
+        # Take the higher quantity; union the categories
+        app_qty      = match.get('quantity', '') or ''
+        app_qty_have = match.get('quantity_have', '') or ''
+        app_cats     = match.get('categories', []) or []
+        merged_qty      = max_qty(app_qty, item['quantity'])
+        merged_qty_have = max_qty(app_qty_have, item['quantity_have'])
+        merged_cats     = merge_categories(app_cats, item.get('category', ''))
+    else:
+        merged_qty      = item['quantity']
+        merged_qty_have = item['quantity_have']
+        merged_cats     = [item['category']] if item.get('category') else []
+
     payload = {
         'name':             item['name'],
-        'category':         item['category'],
+        'categories':       merged_cats,
         'status':           item['status'],
-        'quantity':         item['quantity'],
-        'quantity_have':    item['quantity_have'],
+        'quantity':         merged_qty,
+        'quantity_have':    merged_qty_have,
         'responsible_party': item['responsible_party'],
         'notes':            item['notes'],
         'sort_order':       item['sort_order'],

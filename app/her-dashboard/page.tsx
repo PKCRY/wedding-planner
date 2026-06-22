@@ -24,7 +24,8 @@ export default async function HerDashboardPage() {
   const events = (eventData ?? []) as Event[]
 
   const sorted = [...allTasks].sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999))
-  const top5 = sorted.filter(t => t.status === 'pending' || t.status === 'in_progress').slice(0, 5)
+  const workable = sorted.filter(t => t.status === 'pending' || t.status === 'in_progress')
+  const top5 = workable.slice(0, 5)
   const blocked = sorted.filter(t => t.status === 'blocked')
 
   return (<>
@@ -34,6 +35,7 @@ export default async function HerDashboardPage() {
       initialTop5={top5}
       initialBlocked={blocked}
       initialEvents={events}
+      initialTotalWorkable={workable.length}
     />
   </>)
 }

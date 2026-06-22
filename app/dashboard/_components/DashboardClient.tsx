@@ -137,8 +137,8 @@ export default function DashboardClient({
     fetch('/api/assignees').then(r => r.ok ? r.json() : null).then(names => {
       if (names) setKnownAssignees(names)
     })
-    fetch('/api/inventory').then(r => r.ok ? r.json() : []).then((items: { category?: string }[]) => {
-      setUncatInventoryCount(items.filter(i => !i.category?.trim()).length)
+    fetch('/api/inventory').then(r => r.ok ? r.json() : []).then((items: { categories?: string[] }[]) => {
+      setUncatInventoryCount(items.filter(i => !i.categories?.length).length)
     })
   }, [])
 
@@ -286,7 +286,7 @@ export default function DashboardClient({
   const canDragReorder = tab === 'tasks' && filter === 'all' && !searchLower && !selectMode && !groupByDate
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   )
 
   function handleDragEnd(event: DragEndEvent) {
@@ -313,35 +313,57 @@ export default function DashboardClient({
     <div className="min-h-screen" style={{ backgroundColor: '#f0f4f0' }}>
       {/* Header */}
       <header className="bg-white sticky top-0 z-10" style={{ borderBottom: '1px solid #b8d0ba' }}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div>
+        <div className="w-full px-4 md:px-8 lg:px-10 xl:px-16 py-3 flex items-center gap-4 justify-between">
+          {/* Left: title */}
+          <div className="shrink-0">
             <div className="font-semibold leading-tight" style={{ color: '#2d4a30' }}>Wedding Planner</div>
             <div className="text-xs sm:text-sm" style={{ color: '#9db89f' }}>Hey {user.name}!</div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Center: tab nav — desktop only (lg+) */}
+          <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
+            {([
+              { id: 'tasks',     label: 'Tasks' },
+              { id: 'inventory', label: 'Inventory' },
+              { id: 'timeline',  label: 'Timeline' },
+              { id: 'review',    label: (reviewTasks.length + uncatInventoryCount) > 0 ? `Review (${reviewTasks.length + uncatInventoryCount})` : 'Review' },
+              { id: 'completed', label: 'Done' },
+              { id: 'calendar',  label: 'Calendar' },
+              ...(user.id === 'nick' ? [{ id: 'notify', label: 'Notify' }] : []),
+            ] as { id: Tab; label: string }[]).map(item => (
+              <button
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className="px-3 py-2 text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
+                style={{
+                  color: tab === item.id ? '#2d4a30' : '#9db89f',
+                  backgroundColor: tab === item.id ? '#e8f0e8' : 'transparent',
+                  ...(item.id === 'review' && (reviewTasks.length + uncatInventoryCount) > 0 && tab !== 'review'
+                    ? { color: '#d4849a' } : {}),
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Right: actions */}
+          <div className="flex items-center gap-2 shrink-0">
             <NotificationCenter />
             <button
-              onClick={() => setShowNotify(true)}
-              className="text-sm px-4 rounded-xl font-medium hidden sm:block"
-              style={{ backgroundColor: '#e8f0e8', color: '#5a7d5e', minHeight: 44 }}
-            >
-              Notify
-            </button>
-            <button
               onClick={() => setShowCreate(true)}
-              className="text-sm px-4 rounded-xl font-medium hidden sm:block"
+              className="text-sm px-4 rounded-xl font-medium hidden md:block"
               style={{ backgroundColor: '#d4849a', color: '#fff', minHeight: 44 }}
             >
               + Add Task
             </button>
             <button
               onClick={logout}
-              className="text-sm px-4 rounded-xl font-medium hidden sm:block"
+              className="text-sm px-4 rounded-xl font-medium hidden md:block"
               style={{ backgroundColor: '#f0e8ec', color: '#c0607a', minHeight: 44 }}
             >
               Logout
             </button>
-            {/* Avatar — opens settings */}
             <button
               onClick={() => setShowSettings(true)}
               className="w-11 h-11 rounded-full flex items-center justify-center text-white font-semibold text-base shrink-0 shadow-sm"
@@ -354,13 +376,13 @@ export default function DashboardClient({
         </div>
       </header>
 
-      <div className={`mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-24 ${tab === 'tasks' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+      <div className="w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 py-4 sm:py-6 pb-24 md:pb-6">
 
         {/* Two-column layout on lg+ */}
-        <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
+        <div className="md:grid md:grid-cols-3 md:gap-6 md:items-start">
 
           {/* Left: tasks (full width on mobile, 2/3 on lg, full on lg for board) */}
-          <div className={`space-y-4 ${tab === 'tasks' ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
+          <div className={`space-y-4 ${tab === 'tasks' ? 'md:col-span-3' : 'md:col-span-2'}`}>
 
             {/* Task list */}
             {(tab === 'tasks' || tab === 'completed') && (
@@ -448,7 +470,7 @@ export default function DashboardClient({
                   {displayed.length === 0 ? null : canDragReorder ? (
                     <DndContext id="tasks-dnd" sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                       <SortableContext items={displayed.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                        <div className="drag-list space-y-2 pb-24 lg:pb-8">
+                        <div className="drag-list space-y-2 pb-24 md:pb-8">
                           {displayed.map((task, i) => (
                             <SortableTaskCard
                               key={task.id}
@@ -468,7 +490,7 @@ export default function DashboardClient({
                       </SortableContext>
                     </DndContext>
                   ) : groupByDate ? (
-                    <div className="space-y-2 pb-24 lg:pb-8">
+                    <div className="space-y-2 pb-24 md:pb-8">
                       {groupTasksByMonth(displayed).map(group => {
                         const isMonthCollapsed = collapsedMonths.has(group.key)
                         const todayMonth = new Date().toISOString().slice(0, 7)
@@ -534,7 +556,7 @@ export default function DashboardClient({
                       })}
                     </div>
                   ) : (
-                    <div className="space-y-2 pb-24 lg:pb-8">
+                    <div className="space-y-2 pb-24 md:pb-8">
                       {displayed.map((task, i) => (
                         <TaskCard
                           key={task.id}
@@ -565,7 +587,7 @@ export default function DashboardClient({
 
             {/* In Review — tasks Siobhan submitted */}
             {tab === 'review' && (
-              <div className="space-y-5 pb-24 lg:pb-8">
+              <div className="space-y-5 pb-24 md:pb-8">
                 {/* Inventory review — progress + swipe queue */}
                 <InventoryReview />
 
@@ -604,17 +626,17 @@ export default function DashboardClient({
             {/* Notify Siobhan */}
             {tab === 'notify' && <NotifyTab />}
 
-            {/* Calendar — mobile only when tab=calendar; always in right sidebar on lg */}
+            {/* Calendar — mobile only when tab=calendar; always in right sidebar on md+ */}
             {tab === 'calendar' && (
-              <div className="lg:hidden">
+              <div className="md:hidden">
                 <Calendar tasks={tasks} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
               </div>
             )}
           </div>
 
-          {/* Right sidebar: calendar (lg only, hidden on the desktop kanban view) */}
+          {/* Right sidebar: calendar (md+ only, hidden on the desktop kanban view) */}
           {tab !== 'tasks' && (
-            <div className="hidden lg:block lg:col-span-1 space-y-4">
+            <div className="hidden md:block md:col-span-1 space-y-4">
               <Calendar tasks={tasks} events={events} onAddEvent={addEvent} onDeleteEvent={deleteEvent} />
             </div>
           )}
@@ -671,10 +693,10 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* FAB — mobile only (desktop has header button), hidden on inventory/notify tabs */}
+      {/* FAB — hidden on inventory/notify tabs */}
       {tab !== 'inventory' && tab !== 'notify' && tab !== 'timeline' && !selectMode && <button
         onClick={() => setShowCreate(true)}
-        className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-above-nav"
+        className="fixed right-5 w-14 h-14 text-white rounded-full shadow-lg text-2xl flex items-center justify-center z-10 fab-above-nav md:bottom-6"
         style={{ backgroundColor: '#d4849a' }}
       >
         +
@@ -759,9 +781,9 @@ export default function DashboardClient({
         />
       )}
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 bg-white" style={{ borderTop: '1px solid #e4ede4' }}>
-        <div className="flex items-center justify-around max-w-7xl mx-auto" style={{ paddingTop: 8, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+      {/* Bottom nav — mobile only */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white" style={{ borderTop: '1px solid #e4ede4' }}>
+        <div className="flex items-center justify-around w-full" style={{ paddingTop: 8, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
           {/* Tasks */}
           <button onClick={() => setTab('tasks')} style={{ color: tab === 'tasks' ? '#2d4a30' : '#c8dcc8', flex: 1, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -983,9 +1005,11 @@ function SortableTaskCard(props: {
   return (
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
     >
-      <TaskCard {...props} dragHandle={{ ...attributes, ...listeners }} />
+      <TaskCard {...props} dragHandle={{}} />
     </div>
   )
 }
@@ -1052,7 +1076,7 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
         </div>
 
         {/* Actions */}
-        {!selectMode && <div className="pointer-events-auto flex items-center gap-1 shrink-0">
+        {!selectMode && <div className="pointer-events-auto flex items-center gap-1 shrink-0" onPointerDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
           <button onClick={e => { e.stopPropagation(); cycleStatus() }}
             className="text-xs rounded-lg flex items-center justify-center shrink-0" style={{ width: 28, height: 28, backgroundColor: isDone ? '#e8f4e8' : '#f0f4f0', color: '#7a9e7e' }}>{task.status === 'in_progress' ? '✓' : '→'}</button>
           <button onClick={e => { e.stopPropagation(); onEdit() }}
@@ -1064,20 +1088,9 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
           <button onClick={e => { e.stopPropagation(); onDelete() }}
             className="text-xs rounded-lg flex items-center justify-center shrink-0" style={{ width: 28, height: 28, backgroundColor: '#fdecea', color: '#c0607a' }}>✕</button>
           {dragHandle && (
-            <button
-              {...dragHandle}
-              onClick={e => e.stopPropagation()}
-              onContextMenu={e => e.preventDefault()}
-              className="touch-none rounded cursor-grab active:cursor-grabbing flex items-center justify-center"
-              style={{
-                color: '#b8d0ba',
-                WebkitTouchCallout: 'none',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                touchAction: 'none',
-                minWidth: 28,
-                minHeight: 44,
-              }}
+            <div
+              className="rounded flex items-center justify-center"
+              style={{ color: '#b8d0ba', userSelect: 'none', WebkitUserSelect: 'none', cursor: 'grab', minWidth: 28, minHeight: 44 }}
             >
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <circle cx="7" cy="5" r="2" fill="currentColor"/>
@@ -1087,7 +1100,7 @@ function TaskCard({ task, pos, onDetail, onEdit, onDelete, onPatch, onRequestCon
                 <circle cx="7" cy="15" r="2" fill="currentColor"/>
                 <circle cx="13" cy="15" r="2" fill="currentColor"/>
               </svg>
-            </button>
+            </div>
           )}
         </div>}
       </div>
@@ -1248,12 +1261,11 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
             </div>
             {[
               { label: 'Category', value: task.category || '—' },
-              { label: 'Assigned', value: assigneeLabel(task.assigned_to) },
+              { label: 'Responsible', value: assigneeLabel(task.assigned_to) },
               task.due_date ? { label: 'Due', value: new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) } : null,
               task.created_by ? { label: 'Created by', value: task.created_by } : null,
               task.completed_date ? { label: 'Completed', value: new Date(task.completed_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) } : null,
               task.completed_by ? { label: 'Completed by', value: task.completed_by } : null,
-              task.responsible_party ? { label: 'Responsible', value: task.responsible_party } : null,
               task.important_contacts ? { label: 'Contacts', value: task.important_contacts } : null,
             ].filter(Boolean).map(item => (
               <div key={item!.label} className="rounded-xl p-3 min-w-0" style={{ backgroundColor: '#f0f4f0' }}>
@@ -1406,7 +1418,7 @@ function TaskDetailModal({ task, onClose, onEdit, onDelete, onPatch, onAddCommen
 type TaskFormData = {
   title: string; description: string; category: string; assigned_to: string
   priority: string; due_date: string; status: string
-  blocked_by: string; responsible_party: string; important_contacts: string
+  blocked_by: string; important_contacts: string
 }
 
 function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddComment }: {
@@ -1426,7 +1438,6 @@ function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddCom
     due_date: task?.due_date?.slice(0, 10) ?? '',
     status: task?.status ?? 'pending',
     blocked_by: task?.blocked_by ?? '',
-    responsible_party: task?.responsible_party ?? '',
     important_contacts: task?.important_contacts ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -1548,13 +1559,6 @@ function TaskModal({ task, knownAssignees, categories, onClose, onSave, onAddCom
                   <input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })}
                     className="w-full rounded-xl px-3 py-3 focus:outline-none" style={inputStyle} />
                 </div>
-              </div>
-
-              <div>
-                <label className="text-sm mb-1 block" style={labelStyle}>Responsible party</label>
-                <input value={form.responsible_party} onChange={e => setForm({ ...form, responsible_party: e.target.value })}
-                  placeholder="e.g. Siobhan and Mom"
-                  className="w-full rounded-xl px-4 py-3 focus:outline-none" style={inputStyle} />
               </div>
 
               <div>
